@@ -1,4 +1,0 @@
--------------------------------------------------------------------------------
-Test set: me.tamkungz.codecmedia.internal.audio.ogg.OggParserTest
--------------------------------------------------------------------------------
-Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.007 s -- in me.tamkungz.codecmedia.internal.audio.ogg.OggParserTest
