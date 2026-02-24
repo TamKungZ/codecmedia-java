@@ -1,5 +1,6 @@
 package me.tamkungz.codecmedia.internal;
 
+import java.awt.Desktop;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -19,16 +20,29 @@ import me.tamkungz.codecmedia.internal.audio.mp3.Mp3Parser;
 import me.tamkungz.codecmedia.internal.audio.mp3.Mp3ProbeInfo;
 import me.tamkungz.codecmedia.internal.audio.ogg.OggParser;
 import me.tamkungz.codecmedia.internal.audio.ogg.OggProbeInfo;
+import me.tamkungz.codecmedia.internal.audio.wav.WavParser;
+import me.tamkungz.codecmedia.internal.audio.wav.WavProbeInfo;
+import me.tamkungz.codecmedia.internal.convert.ConversionHub;
+import me.tamkungz.codecmedia.internal.convert.ConversionRequest;
+import me.tamkungz.codecmedia.internal.convert.DefaultConversionHub;
+import me.tamkungz.codecmedia.internal.image.jpeg.JpegParser;
+import me.tamkungz.codecmedia.internal.image.jpeg.JpegProbeInfo;
+import me.tamkungz.codecmedia.internal.image.png.PngParser;
+import me.tamkungz.codecmedia.internal.image.png.PngProbeInfo;
+import me.tamkungz.codecmedia.internal.video.mp4.Mp4Parser;
+import me.tamkungz.codecmedia.internal.video.mp4.Mp4ProbeInfo;
 import me.tamkungz.codecmedia.model.ConversionResult;
 import me.tamkungz.codecmedia.model.ExtractionResult;
 import me.tamkungz.codecmedia.model.MediaType;
 import me.tamkungz.codecmedia.model.Metadata;
+import me.tamkungz.codecmedia.model.PlaybackResult;
 import me.tamkungz.codecmedia.model.ProbeResult;
 import me.tamkungz.codecmedia.model.StreamInfo;
 import me.tamkungz.codecmedia.model.StreamKind;
 import me.tamkungz.codecmedia.model.ValidationResult;
 import me.tamkungz.codecmedia.options.AudioExtractOptions;
 import me.tamkungz.codecmedia.options.ConversionOptions;
+import me.tamkungz.codecmedia.options.PlaybackOptions;
 import me.tamkungz.codecmedia.options.ValidationOptions;
 
 /**
@@ -37,6 +51,12 @@ import me.tamkungz.codecmedia.options.ValidationOptions;
 public final class StubCodecMediaEngine implements CodecMediaEngine {
 
     private static final long STRICT_VALIDATION_MAX_BYTES = 32L * 1024L * 1024L;
+    private final ConversionHub conversionHub = new DefaultConversionHub();
+
+    @Override
+    public ProbeResult get(Path input) throws CodecMediaException {
+        return probe(input);
+    }
 
     @Override
     public ProbeResult probe(Path input) throws CodecMediaException {
@@ -86,17 +106,117 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
                 );
             }
 
+            if ("wav".equals(extension) || WavParser.isLikelyWav(bytes)) {
+                try {
+                    WavProbeInfo info = WavParser.parse(bytes);
+                    return new ProbeResult(
+                            input,
+                            "audio/wav",
+                            "wav",
+                            MediaType.AUDIO,
+                            info.durationMillis(),
+                            List.of(new StreamInfo(0, StreamKind.AUDIO, "pcm", info.bitrateKbps(), info.sampleRate(), info.channels(), null, null, null)),
+                            Map.of("sizeBytes", String.valueOf(size), "bitrateMode", info.bitrateMode().name())
+                    );
+                } catch (CodecMediaException ignored) {
+                    // Fall back to extension-only probe for malformed/partial files.
+                }
+                return new ProbeResult(input, "audio/wav", "wav", MediaType.AUDIO, null, List.of(), Map.of("sizeBytes", String.valueOf(size)));
+            }
+
+            if ("png".equals(extension) || PngParser.isLikelyPng(bytes)) {
+                try {
+                    PngProbeInfo info = PngParser.parse(bytes);
+                    return new ProbeResult(
+                            input,
+                            "image/png",
+                            "png",
+                            MediaType.IMAGE,
+                            null,
+                            List.of(new StreamInfo(0, StreamKind.VIDEO, "png", null, null, null, info.width(), info.height(), null)),
+                            Map.of(
+                                    "sizeBytes", String.valueOf(size),
+                                    "bitDepth", String.valueOf(info.bitDepth()),
+                                    "colorType", String.valueOf(info.colorType())
+                            )
+                    );
+                } catch (CodecMediaException ignored) {
+                    // Fall back to extension-only probe for malformed/partial files.
+                }
+                return new ProbeResult(input, "image/png", "png", MediaType.IMAGE, null, List.of(), Map.of("sizeBytes", String.valueOf(size)));
+            }
+
+            if ("jpg".equals(extension) || "jpeg".equals(extension) || JpegParser.isLikelyJpeg(bytes)) {
+                String outputExt = "jpeg".equals(extension) ? "jpeg" : "jpg";
+                try {
+                    JpegProbeInfo info = JpegParser.parse(bytes);
+                    return new ProbeResult(
+                            input,
+                            "image/jpeg",
+                            outputExt,
+                            MediaType.IMAGE,
+                            null,
+                            List.of(new StreamInfo(0, StreamKind.VIDEO, "jpeg", null, null, null, info.width(), info.height(), null)),
+                            Map.of(
+                                    "sizeBytes", String.valueOf(size),
+                                    "bitsPerSample", String.valueOf(info.bitsPerSample()),
+                                    "channels", String.valueOf(info.channels())
+                            )
+                    );
+                } catch (CodecMediaException ignored) {
+                    // Fall back to extension-only probe for malformed/partial files.
+                }
+                return new ProbeResult(input, "image/jpeg", outputExt, MediaType.IMAGE, null, List.of(), Map.of("sizeBytes", String.valueOf(size)));
+            }
+
+            if ("mp4".equals(extension) || "m4a".equals(extension) || Mp4Parser.isLikelyMp4(bytes)) {
+                String outputExt = "m4a".equals(extension) ? "m4a" : "mp4";
+                String mimeType = "m4a".equals(outputExt) ? "audio/mp4" : "video/mp4";
+                MediaType mediaType = "m4a".equals(outputExt) ? MediaType.AUDIO : MediaType.VIDEO;
+                try {
+                    Mp4ProbeInfo info = Mp4Parser.parse(bytes);
+                    java.util.LinkedHashMap<String, String> tags = new java.util.LinkedHashMap<>();
+                    tags.put("sizeBytes", String.valueOf(size));
+                    if (info.majorBrand() != null && !info.majorBrand().isBlank()) {
+                        tags.put("majorBrand", info.majorBrand());
+                    }
+
+                    List<StreamInfo> streams;
+                    if (mediaType == MediaType.VIDEO && info.width() != null && info.height() != null && info.width() > 0 && info.height() > 0) {
+                        streams = List.of(new StreamInfo(0, StreamKind.VIDEO, "h264/unknown", null, null, null, info.width(), info.height(), null));
+                    } else {
+                        streams = List.of();
+                    }
+
+                    return new ProbeResult(
+                            input,
+                            mimeType,
+                            outputExt,
+                            mediaType,
+                            info.durationMillis(),
+                            streams,
+                            tags
+                    );
+                } catch (CodecMediaException ignored) {
+                    // Fall back to extension-only probe for malformed/partial files.
+                }
+                return new ProbeResult(input, mimeType, outputExt, mediaType, null, List.of(), Map.of("sizeBytes", String.valueOf(size)));
+            }
+
             String mimeType = switch (extension) {
                 case "mp4" -> "video/mp4";
+                case "m4a" -> "audio/mp4";
                 case "mp3" -> "audio/mpeg";
                 case "ogg" -> "audio/ogg";
+                case "wav" -> "audio/wav";
                 case "png" -> "image/png";
+                case "jpg", "jpeg" -> "image/jpeg";
                 default -> "application/octet-stream";
             };
             MediaType mediaType = switch (extension) {
                 case "mp4" -> MediaType.VIDEO;
-                case "mp3", "ogg" -> MediaType.AUDIO;
-                case "png" -> MediaType.IMAGE;
+                case "m4a", "mp3", "ogg", "wav" -> MediaType.AUDIO;
+                case "png", "jpg", "jpeg" -> MediaType.IMAGE;
                 default -> MediaType.UNKNOWN;
             };
 
@@ -209,32 +329,51 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
         }
 
         String sourceExtension = normalizeExtension(extractExtension(input));
-        String outputExtension = normalizeExtension(extractExtension(output));
         String inferredTargetFormat = extractExtension(output);
         ConversionOptions effective = options != null ? options : ConversionOptions.defaults(inferredTargetFormat);
         if (effective.targetFormat() == null || effective.targetFormat().isBlank()) {
             throw new CodecMediaException("ConversionOptions.targetFormat is required");
         }
         String requestedExtension = normalizeExtension(effective.targetFormat());
-        if (!requestedExtension.equals(sourceExtension) || !outputExtension.equals(sourceExtension)) {
-            throw new CodecMediaException(
-                    "Stub convert does not transcode. Input/output/target formats must all be '" + sourceExtension + "'"
-            );
+
+        ProbeResult sourceProbe = probe(input);
+        me.tamkungz.codecmedia.model.MediaType targetMediaType = mediaTypeByExtension(requestedExtension);
+        ConversionRequest request = new ConversionRequest(
+                input,
+                output,
+                sourceExtension,
+                requestedExtension,
+                sourceProbe.mediaType(),
+                targetMediaType,
+                effective
+        );
+        return conversionHub.convert(request);
+    }
+
+    @Override
+    public PlaybackResult play(Path input, PlaybackOptions options) throws CodecMediaException {
+        ensureExists(input);
+        ProbeResult probe = probe(input);
+        PlaybackOptions effective = options != null ? options : PlaybackOptions.defaults();
+
+        if (probe.mediaType() == MediaType.UNKNOWN) {
+            throw new CodecMediaException("Playback is not supported for unknown media type: " + input);
         }
 
-        try {
-            Path parent = output.getParent();
-            if (parent != null) {
-                Files.createDirectories(parent);
-            }
-            if (Files.exists(output) && !effective.overwrite()) {
-                throw new CodecMediaException("Output already exists and overwrite is disabled: " + output);
-            }
-            Files.copy(input, output, StandardCopyOption.REPLACE_EXISTING);
-            return new ConversionResult(output, requestedExtension, false);
-        } catch (IOException e) {
-            throw new CodecMediaException("Failed to convert file: " + input, e);
+        if (effective.dryRun()) {
+            return new PlaybackResult(true, "dry-run", probe.mediaType(), "Playback simulation successful");
         }
+
+        if (effective.allowExternalApp() && Desktop.isDesktopSupported()) {
+            try {
+                Desktop.getDesktop().open(input.toFile());
+                return new PlaybackResult(true, "desktop-open", probe.mediaType(), "Opened with system default application");
+            } catch (IOException | RuntimeException e) {
+                throw new CodecMediaException("Failed to open media with system player/viewer: " + input, e);
+            }
+        }
+
+        throw new CodecMediaException("No playback backend available. Try dryRun=true or allowExternalApp=true");
     }
 
     @Override
@@ -277,6 +416,30 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
                         OggParser.parse(bytes);
                     } catch (CodecMediaException e) {
                         return new ValidationResult(false, List.of(), List.of("Strict validation failed for ogg: " + e.getMessage()));
+                    }
+                } else if ("wav".equals(extension)) {
+                    try {
+                        WavParser.parse(bytes);
+                    } catch (CodecMediaException e) {
+                        return new ValidationResult(false, List.of(), List.of("Strict validation failed for wav: " + e.getMessage()));
+                    }
+                } else if ("png".equals(extension)) {
+                    try {
+                        PngParser.parse(bytes);
+                    } catch (CodecMediaException e) {
+                        return new ValidationResult(false, List.of(), List.of("Strict validation failed for png: " + e.getMessage()));
+                    }
+                } else if ("jpg".equals(extension) || "jpeg".equals(extension)) {
+                    try {
+                        JpegParser.parse(bytes);
+                    } catch (CodecMediaException e) {
+                        return new ValidationResult(false, List.of(), List.of("Strict validation failed for jpg/jpeg: " + e.getMessage()));
+                    }
+                } else if ("mp4".equals(extension) || "m4a".equals(extension)) {
+                    try {
+                        Mp4Parser.parse(bytes);
+                    } catch (CodecMediaException e) {
+                        return new ValidationResult(false, List.of(), List.of("Strict validation failed for " + extension + ": " + e.getMessage()));
                     }
                 }
             }
@@ -335,5 +498,14 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
     private static String baseName(String fileName) {
         int dot = fileName.lastIndexOf('.');
         return dot > 0 ? fileName.substring(0, dot) : fileName;
+    }
+
+    private static MediaType mediaTypeByExtension(String extension) {
+        return switch (normalizeExtension(extension)) {
+            case "mp3", "ogg", "wav", "pcm", "m4a", "aac", "flac" -> MediaType.AUDIO;
+            case "mp4", "mkv", "mov", "avi", "webm" -> MediaType.VIDEO;
+            case "png", "jpg", "jpeg", "gif", "bmp", "webp" -> MediaType.IMAGE;
+            default -> MediaType.UNKNOWN;
+        };
     }
 }

@@ -1,13 +1,12 @@
 package me.tamkungz.codecmedia;
 
+import java.nio.file.Path;
+import java.util.stream.Stream;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.nio.file.Path;
-import java.util.stream.Stream;
-
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -52,7 +51,7 @@ class CodecMediaPlayTest {
 
     private static Stream<Arguments> audioFixtures() {
         return Stream.of(
-                Arguments.of("c-major-scale_test_ableton-live.wav", "application/octet-stream", "wav", MediaType.UNKNOWN, false),
+                Arguments.of("c-major-scale_test_ableton-live.wav", "audio/wav", "wav", MediaType.AUDIO, true),
                 Arguments.of("c-major-scale_test_audacity.mp3", "audio/mpeg", "mp3", MediaType.AUDIO, true),
                 Arguments.of("c-major-scale_test_ffmpeg.ogg", "audio/ogg", "ogg", MediaType.AUDIO, true),
                 Arguments.of("c-major-scale_test_web-convert_mono.mp3", "audio/mpeg", "mp3", MediaType.AUDIO, true)
