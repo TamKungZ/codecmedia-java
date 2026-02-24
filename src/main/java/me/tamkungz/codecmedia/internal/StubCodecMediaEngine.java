@@ -1,11 +1,17 @@
 package me.tamkungz.codecmedia.internal;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Properties;
+import java.util.TreeMap;
 
 import me.tamkungz.codecmedia.CodecMediaEngine;
 import me.tamkungz.codecmedia.CodecMediaException;
@@ -29,6 +35,8 @@ import me.tamkungz.codecmedia.options.ValidationOptions;
  * Temporary stub implementation to bootstrap API integration.
  */
 public final class StubCodecMediaEngine implements CodecMediaEngine {
+
+    private static final long STRICT_VALIDATION_MAX_BYTES = 32L * 1024L * 1024L;
 
     @Override
     public ProbeResult probe(Path input) throws CodecMediaException {
@@ -100,12 +108,27 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
 
     @Override
     public Metadata readMetadata(Path input) throws CodecMediaException {
+        ensureExists(input);
         ProbeResult probe = probe(input);
-        return new Metadata(Map.of(
-                "mimeType", probe.mimeType(),
-                "extension", probe.extension(),
-                "mediaType", probe.mediaType().name()
-        ));
+        Map<String, String> entries = new LinkedHashMap<>();
+        entries.put("mimeType", probe.mimeType());
+        entries.put("extension", probe.extension());
+        entries.put("mediaType", probe.mediaType().name());
+
+        Path sidecar = metadataSidecarPath(input);
+        if (Files.exists(sidecar)) {
+            Properties properties = new Properties();
+            try (InputStream in = Files.newInputStream(sidecar)) {
+                properties.load(in);
+            } catch (IOException e) {
+                throw new CodecMediaException("Failed to read metadata sidecar: " + sidecar, e);
+            }
+            for (String key : properties.stringPropertyNames()) {
+                entries.putIfAbsent(key, properties.getProperty(key));
+            }
+        }
+
+        return new Metadata(entries);
     }
 
     @Override
@@ -114,28 +137,154 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
         if (metadata == null || metadata.entries() == null) {
             throw new CodecMediaException("Metadata is required");
         }
-        throw new CodecMediaException("writeMetadata is not implemented yet");
+
+        for (Map.Entry<String, String> entry : metadata.entries().entrySet()) {
+            if (entry.getKey() == null || entry.getKey().isBlank()) {
+                throw new CodecMediaException("Metadata key must not be null/blank");
+            }
+            if (entry.getValue() == null) {
+                throw new CodecMediaException("Metadata value must not be null for key: " + entry.getKey());
+            }
+        }
+
+        Path sidecar = metadataSidecarPath(input);
+        Properties properties = new Properties();
+        Map<String, String> sorted = new TreeMap<>(metadata.entries());
+        for (Map.Entry<String, String> entry : sorted.entrySet()) {
+            properties.setProperty(entry.getKey(), entry.getValue());
+        }
+
+        try (OutputStream out = Files.newOutputStream(sidecar)) {
+            properties.store(out, "CodecMedia metadata sidecar");
+        } catch (IOException e) {
+            throw new CodecMediaException("Failed to write metadata sidecar: " + sidecar, e);
+        }
     }
 
     @Override
     public ExtractionResult extractAudio(Path input, Path outputDir, AudioExtractOptions options) throws CodecMediaException {
         ensureExists(input);
-        throw new CodecMediaException("extractAudio is not implemented yet");
+        if (outputDir == null) {
+            throw new CodecMediaException("Output directory is required");
+        }
+
+        ProbeResult probe = probe(input);
+        AudioExtractOptions effective = options != null
+                ? options
+                : AudioExtractOptions.defaults(normalizeExtension(probe.extension()));
+        if (effective.targetFormat() == null || effective.targetFormat().isBlank()) {
+            throw new CodecMediaException("AudioExtractOptions.targetFormat is required");
+        }
+
+        if (probe.mediaType() != MediaType.AUDIO) {
+            throw new CodecMediaException("Input is not an audio file: " + input);
+        }
+
+        String sourceExtension = normalizeExtension(probe.extension());
+        String requestedExtension = normalizeExtension(effective.targetFormat());
+        if (!requestedExtension.equals(sourceExtension)) {
+            throw new CodecMediaException(
+                    "Stub extractAudio does not transcode. Requested format '" + requestedExtension
+                            + "' must match source format '" + sourceExtension + "'"
+            );
+        }
+
+        try {
+            Files.createDirectories(outputDir);
+            String baseName = baseName(input.getFileName().toString());
+            String extension = sourceExtension;
+            Path outputFile = outputDir.resolve(baseName + "_audio." + extension);
+            Files.copy(input, outputFile, StandardCopyOption.REPLACE_EXISTING);
+            return new ExtractionResult(outputFile, extension);
+        } catch (IOException e) {
+            throw new CodecMediaException("Failed to extract audio: " + input, e);
+        }
     }
 
     @Override
     public ConversionResult convert(Path input, Path output, ConversionOptions options) throws CodecMediaException {
         ensureExists(input);
-        throw new CodecMediaException("convert is not implemented yet");
+        if (output == null) {
+            throw new CodecMediaException("Output file is required");
+        }
+
+        String sourceExtension = normalizeExtension(extractExtension(input));
+        String outputExtension = normalizeExtension(extractExtension(output));
+        String inferredTargetFormat = extractExtension(output);
+        ConversionOptions effective = options != null ? options : ConversionOptions.defaults(inferredTargetFormat);
+        if (effective.targetFormat() == null || effective.targetFormat().isBlank()) {
+            throw new CodecMediaException("ConversionOptions.targetFormat is required");
+        }
+        String requestedExtension = normalizeExtension(effective.targetFormat());
+        if (!requestedExtension.equals(sourceExtension) || !outputExtension.equals(sourceExtension)) {
+            throw new CodecMediaException(
+                    "Stub convert does not transcode. Input/output/target formats must all be '" + sourceExtension + "'"
+            );
+        }
+
+        try {
+            Path parent = output.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+            if (Files.exists(output) && !effective.overwrite()) {
+                throw new CodecMediaException("Output already exists and overwrite is disabled: " + output);
+            }
+            Files.copy(input, output, StandardCopyOption.REPLACE_EXISTING);
+            return new ConversionResult(output, requestedExtension, false);
+        } catch (IOException e) {
+            throw new CodecMediaException("Failed to convert file: " + input, e);
+        }
     }
 
     @Override
     public ValidationResult validate(Path input, ValidationOptions options) {
+        ValidationOptions effective = options != null ? options : ValidationOptions.defaults();
         boolean exists = Files.exists(input);
         if (!exists) {
             return new ValidationResult(false, List.of(), List.of("File does not exist: " + input));
         }
-        return new ValidationResult(true, List.of(), List.of());
+
+        try {
+            long size = Files.size(input);
+            if (effective.maxBytes() > 0 && size > effective.maxBytes()) {
+                return new ValidationResult(
+                        false,
+                        List.of(),
+                        List.of("File exceeds maxBytes: " + size + " > " + effective.maxBytes())
+                );
+            }
+
+            if (effective.strict()) {
+                String extension = extractExtension(input);
+                if (size > STRICT_VALIDATION_MAX_BYTES) {
+                    return new ValidationResult(
+                            false,
+                            List.of(),
+                            List.of("Strict validation is limited to files <= " + STRICT_VALIDATION_MAX_BYTES + " bytes")
+                    );
+                }
+
+                byte[] bytes = Files.readAllBytes(input);
+                if ("mp3".equals(extension)) {
+                    try {
+                        Mp3Parser.parse(bytes);
+                    } catch (CodecMediaException e) {
+                        return new ValidationResult(false, List.of(), List.of("Strict validation failed for mp3: " + e.getMessage()));
+                    }
+                } else if ("ogg".equals(extension)) {
+                    try {
+                        OggParser.parse(bytes);
+                    } catch (CodecMediaException e) {
+                        return new ValidationResult(false, List.of(), List.of("Strict validation failed for ogg: " + e.getMessage()));
+                    }
+                }
+            }
+
+            return new ValidationResult(true, List.of(), List.of());
+        } catch (IOException e) {
+            return new ValidationResult(false, List.of(), List.of("Failed to validate file: " + e.getMessage()));
+        }
     }
 
     private static void ensureExists(Path input) throws CodecMediaException {
@@ -172,5 +321,19 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
             return false;
         }
         return (bytes[0] & (byte) 0xFF) == (byte) 0xFF && (bytes[1] & (byte) 0xE0) == (byte) 0xE0;
+    }
+
+    private static Path metadataSidecarPath(Path input) {
+        return input.resolveSibling(input.getFileName() + ".codecmedia.properties");
+    }
+
+    private static String normalizeExtension(String format) {
+        String value = format.trim().toLowerCase(Locale.ROOT);
+        return value.startsWith(".") ? value.substring(1) : value;
+    }
+
+    private static String baseName(String fileName) {
+        int dot = fileName.lastIndexOf('.');
+        return dot > 0 ? fileName.substring(0, dot) : fileName;
     }
 }

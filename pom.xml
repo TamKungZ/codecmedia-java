@@ -16,7 +16,7 @@
     Supports probing, metadata reading/writing, container parsing,
     audio/video extraction and format conversion.
   </description>
-  <url>https://github.com/TamKungZ/codecmedia</url>
+  <url>https://github.com/TamKungZ/codecmedia-java</url>
 
   <organization>
     <name>TamKungZ_</name>
@@ -27,18 +27,18 @@
 
   <issueManagement>
     <system>GitHub Issues</system>
-    <url>https://github.com/TamKungZ/codecmedia/issues</url>
+    <url>https://github.com/TamKungZ/codecmedia-java/issues</url>
   </issueManagement>
 
   <ciManagement>
     <system>GitHub Actions</system>
-    <url>https://github.com/TamKungZ/codecmedia/actions</url>
+    <url>https://github.com/TamKungZ/codecmedia-java/actions</url>
   </ciManagement>
 
   <licenses>
     <license>
-      <name>MIT License</name>
-      <url>https://opensource.org/licenses/MIT</url>
+      <name>Apache License 2.0</name>
+      <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
       <distribution>repo</distribution>
     </license>
   </licenses>
@@ -58,9 +58,9 @@
   </developers>
 
   <scm>
-    <connection>scm:git:git://github.com/TamKungZ/codecmedia.git</connection>
-    <developerConnection>scm:git:ssh://github.com:TamKungZ/codecmedia.git</developerConnection>
-    <url>https://github.com/TamKungZ/codecmedia</url>
+    <connection>scm:git:git://github.com/TamKungZ/codecmedia-java.git</connection>
+    <developerConnection>scm:git:ssh://github.com:TamKungZ/codecmedia-java.git</developerConnection>
+    <url>https://github.com/TamKungZ/codecmedia-java</url>
   </scm>
 
   <distributionManagement>

@@ -9,4 +9,9 @@ public record AudioExtractOptions(
     public static AudioExtractOptions defaults() {
         return new AudioExtractOptions("m4a", 192, 0);
     }
+
+    public static AudioExtractOptions defaults(String targetFormat) {
+        String effective = (targetFormat == null || targetFormat.isBlank()) ? "m4a" : targetFormat;
+        return new AudioExtractOptions(effective, 192, 0);
+    }
 }
