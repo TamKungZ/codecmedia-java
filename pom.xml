@@ -77,6 +77,8 @@
     <maven.build.timestamp.format>yyyy-MM-dd'T'HH:mm:ss'Z'</maven.build.timestamp.format>
 
     <gpg.keyname>7311416EAA9848E4</gpg.keyname>
+
+    <project.logo.url>https://www.tamkungz.me/assets-image/CodecMedia_Logo.png</project.logo.url>
   </properties>
 
   <dependencies>
