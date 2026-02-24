@@ -1,0 +1,214 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>me.tamkungz.codecmedia</groupId>
+  <artifactId>codecmedia</artifactId>
+  <version>1.0.0</version>
+  <packaging>jar</packaging>
+
+  <name>CodecMedia</name>
+  <description>
+    Universal media processing library for Java.
+    Supports probing, metadata reading/writing, container parsing,
+    audio/video extraction and format conversion.
+  </description>
+  <url>https://github.com/TamKungZ/codecmedia</url>
+
+  <organization>
+    <name>TamKungZ_</name>
+    <url>https://www.tamkungz.me/</url>
+  </organization>
+
+  <inceptionYear>2026</inceptionYear>
+
+  <issueManagement>
+    <system>GitHub Issues</system>
+    <url>https://github.com/TamKungZ/codecmedia/issues</url>
+  </issueManagement>
+
+  <ciManagement>
+    <system>GitHub Actions</system>
+    <url>https://github.com/TamKungZ/codecmedia/actions</url>
+  </ciManagement>
+
+  <licenses>
+    <license>
+      <name>MIT License</name>
+      <url>https://opensource.org/licenses/MIT</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
+  <developers>
+    <developer>
+      <id>tamkungz</id>
+      <name>TamKungZ_</name>
+      <email>kittiwut.pimpromma@gmail.com</email>
+      <roles>
+        <role>owner</role>
+        <role>developer</role>
+        <role>maintainer</role>
+      </roles>
+      <timezone>Asia/Bangkok</timezone>
+    </developer>
+  </developers>
+
+  <scm>
+    <connection>scm:git:git://github.com/TamKungZ/codecmedia.git</connection>
+    <developerConnection>scm:git:ssh://github.com:TamKungZ/codecmedia.git</developerConnection>
+    <url>https://github.com/TamKungZ/codecmedia</url>
+  </scm>
+
+  <distributionManagement>
+    <repository>
+      <id>central</id>
+      <url>https://central.sonatype.com/api/v1/publisher</url>
+    </repository>
+  </distributionManagement>
+
+  <properties>
+    <maven.compiler.release>17</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.build.outputTimestamp>${maven.build.timestamp}</project.build.outputTimestamp>
+    <maven.build.timestamp.format>yyyy-MM-dd'T'HH:mm:ss'Z'</maven.build.timestamp.format>
+
+    <gpg.keyname>7311416EAA9848E4</gpg.keyname>
+  </properties>
+
+  <dependencies>
+	<dependency>
+		<groupId>org.junit.jupiter</groupId>
+		<artifactId>junit-jupiter-api</artifactId>
+		<version>6.0.2</version>
+		<scope>test</scope>
+	</dependency>
+	
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>6.0.2</version>
+      <scope>test</scope>
+    </dependency>
+	
+	<dependency>
+		<groupId>org.junit.jupiter</groupId>
+		<artifactId>junit-jupiter-engine</artifactId>
+		<version>6.0.2</version>
+		<scope>test</scope>
+	</dependency>
+	
+	<dependency>
+		<groupId>org.junit.jupiter</groupId>
+		<artifactId>junit-jupiter-params</artifactId>
+		<version>6.0.2</version>
+		<scope>test</scope>
+	</dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+
+      <!-- Compiler -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.15.0</version>
+        <configuration>
+          <release>17</release>
+        </configuration>
+      </plugin>
+
+      <!-- Tests -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.5.5</version>
+      </plugin>
+
+      <!-- JAR Manifest -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.5.0</version>
+        <configuration>
+          <archive>
+            <manifest>
+              <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+              <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
+            </manifest>
+            <manifestEntries>
+              <Built-By>TamKungZ_</Built-By>
+              <Implementation-Version>${project.version}</Implementation-Version>
+              <Implementation-Title>${project.name}</Implementation-Title>
+            </manifestEntries>
+          </archive>
+        </configuration>
+      </plugin>
+
+      <!-- Sources -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-source-plugin</artifactId>
+        <version>3.4.0</version>
+        <executions>
+          <execution>
+            <id>attach-sources</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>jar-no-fork</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Javadoc -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-javadoc-plugin</artifactId>
+        <version>3.12.0</version>
+        <configuration>
+          <doclint>none</doclint>
+        </configuration>
+        <executions>
+          <execution>
+            <id>attach-javadocs</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- GPG -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-gpg-plugin</artifactId>
+        <version>3.2.8</version>
+        <executions>
+          <execution>
+            <id>sign-artifacts</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>sign</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <!-- Central Publishing -->
+      <plugin>
+        <groupId>org.sonatype.central</groupId>
+        <artifactId>central-publishing-maven-plugin</artifactId>
+        <version>0.10.0</version>
+        <extensions>true</extensions>
+      </plugin>
+
+    </plugins>
+  </build>
+
+</project>
