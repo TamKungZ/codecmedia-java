@@ -1,9 +1,12 @@
 package me.tamkungz.codecmedia;
 
+import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+
+import javax.imageio.ImageIO;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -145,6 +148,52 @@ class CodecMediaFacadeTest {
         } finally {
             Files.deleteIfExists(outputPng);
             Files.deleteIfExists(tempMp3);
+        }
+    }
+
+    @Test
+    void convert_shouldTranscodePngToJpg() throws Exception {
+        CodecMediaEngine engine = CodecMedia.createDefault();
+        Path tempPng = createTempFileWithResource("png_test.png", ".png");
+        Path outputJpg = Files.createTempFile("codecmedia-png-to-jpg-", ".jpg");
+
+        try {
+            var converted = engine.convert(tempPng, outputJpg, new me.tamkungz.codecmedia.options.ConversionOptions("jpg", "balanced", true));
+            assertEquals("jpg", converted.format());
+            assertTrue(converted.reencoded());
+            assertTrue(Files.exists(outputJpg));
+            assertTrue(Files.size(outputJpg) > 0);
+
+            var probed = engine.probe(outputJpg);
+            assertEquals("image/jpeg", probed.mimeType());
+            assertEquals("jpg", probed.extension());
+            assertEquals(me.tamkungz.codecmedia.model.MediaType.IMAGE, probed.mediaType());
+        } finally {
+            Files.deleteIfExists(outputJpg);
+            Files.deleteIfExists(tempPng);
+        }
+    }
+
+    @Test
+    void convert_shouldTranscodeJpgToPng() throws Exception {
+        CodecMediaEngine engine = CodecMedia.createDefault();
+        Path tempJpg = createTempJpegFixture(".jpg");
+        Path outputPng = Files.createTempFile("codecmedia-jpg-to-png-", ".png");
+
+        try {
+            var converted = engine.convert(tempJpg, outputPng, new me.tamkungz.codecmedia.options.ConversionOptions("png", "balanced", true));
+            assertEquals("png", converted.format());
+            assertTrue(converted.reencoded());
+            assertTrue(Files.exists(outputPng));
+            assertTrue(Files.size(outputPng) > 0);
+
+            var probed = engine.probe(outputPng);
+            assertEquals("image/png", probed.mimeType());
+            assertEquals("png", probed.extension());
+            assertEquals(me.tamkungz.codecmedia.model.MediaType.IMAGE, probed.mediaType());
+        } finally {
+            Files.deleteIfExists(outputPng);
+            Files.deleteIfExists(tempJpg);
         }
     }
 
@@ -406,23 +455,13 @@ class CodecMediaFacadeTest {
     }
 
     private static Path createTempJpegFixture(String suffix) throws IOException {
-        byte[] jpeg1x1 = new byte[] {
-                (byte) 0xFF, (byte) 0xD8,
-                (byte) 0xFF, (byte) 0xE0, 0x00, 0x10,
-                0x4A, 0x46, 0x49, 0x46, 0x00,
-                0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00,
-                (byte) 0xFF, (byte) 0xC0, 0x00, 0x11,
-                0x08,
-                0x00, 0x01,
-                0x00, 0x01,
-                0x03,
-                0x01, 0x11, 0x00,
-                0x02, 0x11, 0x00,
-                0x03, 0x11, 0x00,
-                (byte) 0xFF, (byte) 0xD9
-        };
         Path temp = Files.createTempFile("codecmedia-jpeg-", suffix);
-        Files.write(temp, jpeg1x1);
+        BufferedImage image = new BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB);
+        image.setRGB(0, 0, 0xFFFFFF);
+        boolean ok = ImageIO.write(image, "jpg", temp.toFile());
+        if (!ok) {
+            throw new IOException("No JPEG writer available in ImageIO runtime");
+        }
         return temp;
     }
 

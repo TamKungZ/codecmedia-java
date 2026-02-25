@@ -19,9 +19,7 @@ public final class DefaultConversionHub implements ConversionHub {
     private final MediaConverter audioToAudioTranscodeConverter = new UnsupportedRouteConverter(
             "audio->audio transcoding is not implemented yet (planned conversion hub path)"
     );
-    private final MediaConverter imageToImageTranscodeConverter = new UnsupportedRouteConverter(
-            "image->image transcoding is not implemented yet (planned conversion hub path)"
-    );
+    private final MediaConverter imageToImageTranscodeConverter = new ImageTranscodeConverter();
 
     @Override
     public ConversionResult convert(ConversionRequest request) throws CodecMediaException {

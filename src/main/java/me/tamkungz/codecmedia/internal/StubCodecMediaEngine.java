@@ -16,19 +16,31 @@ import java.util.TreeMap;
 
 import me.tamkungz.codecmedia.CodecMediaEngine;
 import me.tamkungz.codecmedia.CodecMediaException;
+import me.tamkungz.codecmedia.internal.audio.mp3.Mp3Codec;
 import me.tamkungz.codecmedia.internal.audio.mp3.Mp3Parser;
 import me.tamkungz.codecmedia.internal.audio.mp3.Mp3ProbeInfo;
+import me.tamkungz.codecmedia.internal.audio.ogg.OggCodec;
 import me.tamkungz.codecmedia.internal.audio.ogg.OggParser;
 import me.tamkungz.codecmedia.internal.audio.ogg.OggProbeInfo;
+import me.tamkungz.codecmedia.internal.audio.wav.WavCodec;
 import me.tamkungz.codecmedia.internal.audio.wav.WavParser;
 import me.tamkungz.codecmedia.internal.audio.wav.WavProbeInfo;
 import me.tamkungz.codecmedia.internal.convert.ConversionHub;
 import me.tamkungz.codecmedia.internal.convert.ConversionRequest;
 import me.tamkungz.codecmedia.internal.convert.DefaultConversionHub;
+import me.tamkungz.codecmedia.internal.image.bmp.BmpParser;
+import me.tamkungz.codecmedia.internal.image.bmp.BmpProbeInfo;
+import me.tamkungz.codecmedia.internal.image.heif.HeifParser;
+import me.tamkungz.codecmedia.internal.image.heif.HeifProbeInfo;
 import me.tamkungz.codecmedia.internal.image.jpeg.JpegParser;
 import me.tamkungz.codecmedia.internal.image.jpeg.JpegProbeInfo;
 import me.tamkungz.codecmedia.internal.image.png.PngParser;
 import me.tamkungz.codecmedia.internal.image.png.PngProbeInfo;
+import me.tamkungz.codecmedia.internal.image.tiff.TiffParser;
+import me.tamkungz.codecmedia.internal.image.tiff.TiffProbeInfo;
+import me.tamkungz.codecmedia.internal.image.webp.WebpParser;
+import me.tamkungz.codecmedia.internal.image.webp.WebpProbeInfo;
+import me.tamkungz.codecmedia.internal.video.mp4.Mp4Codec;
 import me.tamkungz.codecmedia.internal.video.mp4.Mp4Parser;
 import me.tamkungz.codecmedia.internal.video.mp4.Mp4ProbeInfo;
 import me.tamkungz.codecmedia.model.ConversionResult;
@@ -70,7 +82,7 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
             if ("mp3".equals(extension) || isLikelyMp3(bytes)) {
                 if (bytes.length >= 4) {
                     try {
-                        Mp3ProbeInfo info = Mp3Parser.parse(bytes);
+                        Mp3ProbeInfo info = Mp3Codec.decode(bytes, input);
                         return new ProbeResult(
                                 input,
                                 "audio/mpeg",
@@ -91,7 +103,7 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
             }
 
             if ("ogg".equals(extension) || isLikelyOgg(bytes)) {
-                OggProbeInfo info = OggParser.parse(bytes);
+                OggProbeInfo info = OggCodec.decode(bytes, input);
                 return new ProbeResult(
                         input,
                         "audio/ogg",
@@ -108,7 +120,7 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
 
             if ("wav".equals(extension) || WavParser.isLikelyWav(bytes)) {
                 try {
-                    WavProbeInfo info = WavParser.parse(bytes);
+                    WavProbeInfo info = WavCodec.decode(bytes, input);
                     return new ProbeResult(
                             input,
                             "audio/wav",
@@ -169,12 +181,118 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
                 return new ProbeResult(input, "image/jpeg", outputExt, MediaType.IMAGE, null, List.of(), Map.of("sizeBytes", String.valueOf(size)));
             }
 
+            if ("webp".equals(extension) || WebpParser.isLikelyWebp(bytes)) {
+                try {
+                    WebpProbeInfo info = WebpParser.parse(bytes);
+                    java.util.LinkedHashMap<String, String> tags = new java.util.LinkedHashMap<>();
+                    tags.put("sizeBytes", String.valueOf(size));
+                    if (info.bitDepth() != null) {
+                        tags.put("bitDepth", String.valueOf(info.bitDepth()));
+                    }
+                    return new ProbeResult(
+                            input,
+                            "image/webp",
+                            "webp",
+                            MediaType.IMAGE,
+                            null,
+                            List.of(new StreamInfo(0, StreamKind.VIDEO, "webp", null, null, null, info.width(), info.height(), null)),
+                            tags
+                    );
+                } catch (CodecMediaException ignored) {
+                    // Fall back to extension-only probe for malformed/partial files.
+                }
+                return new ProbeResult(input, "image/webp", "webp", MediaType.IMAGE, null, List.of(), Map.of("sizeBytes", String.valueOf(size)));
+            }
+
+            if ("bmp".equals(extension) || BmpParser.isLikelyBmp(bytes)) {
+                try {
+                    BmpProbeInfo info = BmpParser.parse(bytes);
+                    return new ProbeResult(
+                            input,
+                            "image/bmp",
+                            "bmp",
+                            MediaType.IMAGE,
+                            null,
+                            List.of(new StreamInfo(0, StreamKind.VIDEO, "bmp", null, null, null, info.width(), info.height(), null)),
+                            Map.of(
+                                    "sizeBytes", String.valueOf(size),
+                                    "bitsPerPixel", String.valueOf(info.bitsPerPixel())
+                            )
+                    );
+                } catch (CodecMediaException ignored) {
+                    // Fall back to extension-only probe for malformed/partial files.
+                }
+                return new ProbeResult(input, "image/bmp", "bmp", MediaType.IMAGE, null, List.of(), Map.of("sizeBytes", String.valueOf(size)));
+            }
+
+            if ("tif".equals(extension) || "tiff".equals(extension) || TiffParser.isLikelyTiff(bytes)) {
+                String outputExt = "tiff".equals(extension) ? "tiff" : "tif";
+                try {
+                    TiffProbeInfo info = TiffParser.parse(bytes);
+                    java.util.LinkedHashMap<String, String> tags = new java.util.LinkedHashMap<>();
+                    tags.put("sizeBytes", String.valueOf(size));
+                    if (info.bitDepth() != null) {
+                        tags.put("bitDepth", String.valueOf(info.bitDepth()));
+                    }
+                    return new ProbeResult(
+                            input,
+                            "image/tiff",
+                            outputExt,
+                            MediaType.IMAGE,
+                            null,
+                            List.of(new StreamInfo(0, StreamKind.VIDEO, "tiff", null, null, null, info.width(), info.height(), null)),
+                            tags
+                    );
+                } catch (CodecMediaException ignored) {
+                    // Fall back to extension-only probe for malformed/partial files.
+                }
+                return new ProbeResult(input, "image/tiff", outputExt, MediaType.IMAGE, null, List.of(), Map.of("sizeBytes", String.valueOf(size)));
+            }
+
+            if ("heic".equals(extension) || "heif".equals(extension) || "avif".equals(extension) || HeifParser.isLikelyHeif(bytes)) {
+                String outputExt = "heif".equals(extension) ? "heif" : "heic";
+                if ("avif".equals(extension)) {
+                    outputExt = "avif";
+                }
+                String mimeType = "image/" + outputExt;
+                try {
+                    HeifProbeInfo info = HeifParser.parse(bytes);
+                    String majorBrand = info.majorBrand();
+                    if ("avif".equals(majorBrand) || "avis".equals(majorBrand)) {
+                        outputExt = "avif";
+                        mimeType = "image/avif";
+                    }
+                    java.util.List<StreamInfo> streams = List.of();
+                    if (info.width() != null && info.height() != null) {
+                        streams = List.of(new StreamInfo(0, StreamKind.VIDEO, outputExt, null, null, null, info.width(), info.height(), null));
+                    }
+                    java.util.LinkedHashMap<String, String> tags = new java.util.LinkedHashMap<>();
+                    tags.put("sizeBytes", String.valueOf(size));
+                    tags.put("majorBrand", majorBrand);
+                    if (info.bitDepth() != null) {
+                        tags.put("bitDepth", String.valueOf(info.bitDepth()));
+                    }
+                    return new ProbeResult(
+                            input,
+                            mimeType,
+                            outputExt,
+                            MediaType.IMAGE,
+                            null,
+                            streams,
+                            tags
+                    );
+                } catch (CodecMediaException ignored) {
+                    // Fall back to extension-only probe for malformed/partial files.
+                }
+                return new ProbeResult(input, mimeType, outputExt, MediaType.IMAGE, null, List.of(), Map.of("sizeBytes", String.valueOf(size)));
+            }
+
             if ("mp4".equals(extension) || "m4a".equals(extension) || Mp4Parser.isLikelyMp4(bytes)) {
                 String outputExt = "m4a".equals(extension) ? "m4a" : "mp4";
                 String mimeType = "m4a".equals(outputExt) ? "audio/mp4" : "video/mp4";
                 MediaType mediaType = "m4a".equals(outputExt) ? MediaType.AUDIO : MediaType.VIDEO;
                 try {
-                    Mp4ProbeInfo info = Mp4Parser.parse(bytes);
+                    Mp4ProbeInfo info = Mp4Codec.decode(bytes, input);
                     java.util.LinkedHashMap<String, String> tags = new java.util.LinkedHashMap<>();
                     tags.put("sizeBytes", String.valueOf(size));
                     if (info.majorBrand() != null && !info.majorBrand().isBlank()) {
@@ -211,12 +329,18 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
                 case "wav" -> "audio/wav";
                 case "png" -> "image/png";
                 case "jpg", "jpeg" -> "image/jpeg";
+                case "webp" -> "image/webp";
+                case "bmp" -> "image/bmp";
+                case "tif", "tiff" -> "image/tiff";
+                case "heic" -> "image/heic";
+                case "heif" -> "image/heif";
+                case "avif" -> "image/avif";
                 default -> "application/octet-stream";
             };
             MediaType mediaType = switch (extension) {
                 case "mp4" -> MediaType.VIDEO;
                 case "m4a", "mp3", "ogg", "wav" -> MediaType.AUDIO;
-                case "png", "jpg", "jpeg" -> MediaType.IMAGE;
+                case "png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff", "heic", "heif", "avif" -> MediaType.IMAGE;
                 default -> MediaType.UNKNOWN;
             };
 
@@ -441,6 +565,30 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
                     } catch (CodecMediaException e) {
                         return new ValidationResult(false, List.of(), List.of("Strict validation failed for " + extension + ": " + e.getMessage()));
                     }
+                } else if ("webp".equals(extension)) {
+                    try {
+                        WebpParser.parse(bytes);
+                    } catch (CodecMediaException e) {
+                        return new ValidationResult(false, List.of(), List.of("Strict validation failed for webp: " + e.getMessage()));
+                    }
+                } else if ("bmp".equals(extension)) {
+                    try {
+                        BmpParser.parse(bytes);
+                    } catch (CodecMediaException e) {
+                        return new ValidationResult(false, List.of(), List.of("Strict validation failed for bmp: " + e.getMessage()));
+                    }
+                } else if ("tif".equals(extension) || "tiff".equals(extension)) {
+                    try {
+                        TiffParser.parse(bytes);
+                    } catch (CodecMediaException e) {
+                        return new ValidationResult(false, List.of(), List.of("Strict validation failed for tif/tiff: " + e.getMessage()));
+                    }
+                } else if ("heic".equals(extension) || "heif".equals(extension) || "avif".equals(extension)) {
+                    try {
+                        HeifParser.parse(bytes);
+                    } catch (CodecMediaException e) {
+                        return new ValidationResult(false, List.of(), List.of("Strict validation failed for heic/heif/avif: " + e.getMessage()));
+                    }
                 }
             }
 
@@ -504,7 +652,7 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
         return switch (normalizeExtension(extension)) {
             case "mp3", "ogg", "wav", "pcm", "m4a", "aac", "flac" -> MediaType.AUDIO;
             case "mp4", "mkv", "mov", "avi", "webm" -> MediaType.VIDEO;
-            case "png", "jpg", "jpeg", "gif", "bmp", "webp" -> MediaType.IMAGE;
+            case "png", "jpg", "jpeg", "gif", "bmp", "webp", "tif", "tiff", "heic", "heif", "avif" -> MediaType.IMAGE;
             default -> MediaType.UNKNOWN;
         };
     }
