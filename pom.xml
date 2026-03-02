@@ -7,16 +7,16 @@
 
   <groupId>me.tamkungz.codecmedia</groupId>
   <artifactId>codecmedia</artifactId>
-  <version>1.0.1</version>
+  <version>1.0.2</version>
   <packaging>jar</packaging>
 
   <name>CodecMedia</name>
   <description>
     Universal media processing library for Java.
-    Supports probing, metadata reading/writing, container parsing,
-    audio/video extraction and format conversion.
+    CodecMedia is a Java library for media probing, validation, metadata sidecar persistence,
+    audio extraction, playback workflow simulation, and conversion routing. (Image/Video/Audio)
   </description>
-  <url>https://github.com/TamKungZ/codecmedia-java</url>
+  <url>https://codecmedia.tamkungz.me/</url>
 
   <organization>
     <name>TamKungZ_</name>
@@ -78,7 +78,8 @@
 
     <gpg.keyname>7311416EAA9848E4</gpg.keyname>
 
-    <project.logo.url>https://www.tamkungz.me/assets-image/CodecMedia_Logo.png</project.logo.url>
+    <project.logo.url>https://codecmedia.tamkungz.me/CodecMedia_Icon_Logo.png</project.logo.url>
+    <project.full.logo.url>https://codecmedia.tamkungz.me/CodecMedia_Full_Logo.png</project.full.logo.url>
   </properties>
 
   <dependencies>

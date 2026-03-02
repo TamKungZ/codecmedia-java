@@ -406,6 +406,87 @@ class CodecMediaFacadeTest {
     }
 
     @Test
+    void probe_shouldDetectMovByContainerHeader() throws Exception {
+        CodecMediaEngine engine = CodecMedia.createDefault();
+        Path tempMov = createTempMovFixture();
+
+        try {
+            var result = engine.probe(tempMov);
+            assertEquals("video/quicktime", result.mimeType());
+            assertEquals("mov", result.extension());
+            assertEquals(me.tamkungz.codecmedia.model.MediaType.VIDEO, result.mediaType());
+            assertTrue(result.tags().containsKey("sizeBytes"));
+            assertTrue(result.tags().containsKey("majorBrand"));
+        } finally {
+            Files.deleteIfExists(tempMov);
+        }
+    }
+
+    @Test
+    void validate_strictShouldAcceptValidMovFixture() throws Exception {
+        CodecMediaEngine engine = CodecMedia.createDefault();
+        Path tempMov = createTempMovFixture();
+
+        try {
+            var result = engine.validate(tempMov, new me.tamkungz.codecmedia.options.ValidationOptions(true, 0));
+            assertTrue(result.valid());
+            assertTrue(result.errors().isEmpty());
+        } finally {
+            Files.deleteIfExists(tempMov);
+        }
+    }
+
+    @Test
+    void probe_shouldDetectWebmByContainerHeader() throws Exception {
+        CodecMediaEngine engine = CodecMedia.createDefault();
+        Path tempWebm = createTempWebmFixture();
+
+        try {
+            var result = engine.probe(tempWebm);
+            assertEquals("video/webm", result.mimeType());
+            assertEquals("webm", result.extension());
+            assertEquals(me.tamkungz.codecmedia.model.MediaType.VIDEO, result.mediaType());
+            assertTrue(result.tags().containsKey("sizeBytes"));
+        } finally {
+            Files.deleteIfExists(tempWebm);
+        }
+    }
+
+    @Test
+    void validate_strictShouldAcceptValidWebmFixture() throws Exception {
+        CodecMediaEngine engine = CodecMedia.createDefault();
+        Path tempWebm = createTempWebmFixture();
+
+        try {
+            var result = engine.validate(tempWebm, new me.tamkungz.codecmedia.options.ValidationOptions(true, 0));
+            assertTrue(result.valid());
+            assertTrue(result.errors().isEmpty());
+        } finally {
+            Files.deleteIfExists(tempWebm);
+        }
+    }
+
+    @Test
+    void convert_shouldRejectMovToWebmVideoToVideoRouteForNow() throws Exception {
+        CodecMediaEngine engine = CodecMedia.createDefault();
+        Path tempMov = createTempMovFixture();
+        Path outputWebm = Files.createTempFile("codecmedia-mov-to-webm-", ".webm");
+
+        try {
+            boolean threw = false;
+            try {
+                engine.convert(tempMov, outputWebm, new me.tamkungz.codecmedia.options.ConversionOptions("webm", "balanced", true));
+            } catch (CodecMediaException expected) {
+                threw = expected.getMessage().contains("video->video");
+            }
+            assertTrue(threw);
+        } finally {
+            Files.deleteIfExists(outputWebm);
+            Files.deleteIfExists(tempMov);
+        }
+    }
+
+    @Test
     void get_shouldAliasProbe() throws Exception {
         CodecMediaEngine engine = CodecMedia.createDefault();
         Path tempMp3 = createTempFileWithResource("c-major-scale_test_audacity.mp3", ".mp3");
@@ -463,6 +544,40 @@ class CodecMediaFacadeTest {
             throw new IOException("No JPEG writer available in ImageIO runtime");
         }
         return temp;
+    }
+
+    private static Path createTempMovFixture() throws IOException {
+        Path temp = Files.createTempFile("codecmedia-mov-", ".mov");
+        Files.write(temp, minimalMovBytes());
+        return temp;
+    }
+
+    private static Path createTempWebmFixture() throws IOException {
+        Path temp = Files.createTempFile("codecmedia-webm-", ".webm");
+        Files.write(temp, minimalWebmBytes());
+        return temp;
+    }
+
+    private static byte[] minimalMovBytes() {
+        // 20-byte ftyp box: size(4) + type(4) + major_brand(4) + minor(4) + compatible_brand(4)
+        return new byte[] {
+                0x00, 0x00, 0x00, 0x14,
+                'f', 't', 'y', 'p',
+                'q', 't', ' ', ' ',
+                0x00, 0x00, 0x00, 0x00,
+                'q', 't', ' ', ' '
+        };
+    }
+
+    private static byte[] minimalWebmBytes() {
+        // Minimal EBML header + DocType=webm segment that parser accepts for strict validation.
+        return new byte[] {
+                0x1A, 0x45, (byte) 0xDF, (byte) 0xA3,
+                (byte) 0x88,
+                0x42, (byte) 0x82, (byte) 0x84,
+                'w', 'e', 'b', 'm',
+                0x00, 0x00, 0x00, 0x00
+        };
     }
 
     private static void deleteDirectory(Path dir) throws IOException {

@@ -43,6 +43,12 @@ import me.tamkungz.codecmedia.internal.image.webp.WebpProbeInfo;
 import me.tamkungz.codecmedia.internal.video.mp4.Mp4Codec;
 import me.tamkungz.codecmedia.internal.video.mp4.Mp4Parser;
 import me.tamkungz.codecmedia.internal.video.mp4.Mp4ProbeInfo;
+import me.tamkungz.codecmedia.internal.video.mov.MovCodec;
+import me.tamkungz.codecmedia.internal.video.mov.MovParser;
+import me.tamkungz.codecmedia.internal.video.mov.MovProbeInfo;
+import me.tamkungz.codecmedia.internal.video.webm.WebmCodec;
+import me.tamkungz.codecmedia.internal.video.webm.WebmParser;
+import me.tamkungz.codecmedia.internal.video.webm.WebmProbeInfo;
 import me.tamkungz.codecmedia.model.ConversionResult;
 import me.tamkungz.codecmedia.model.ExtractionResult;
 import me.tamkungz.codecmedia.model.MediaType;
@@ -287,6 +293,54 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
                 return new ProbeResult(input, mimeType, outputExt, MediaType.IMAGE, null, List.of(), Map.of("sizeBytes", String.valueOf(size)));
             }
 
+            if ("mov".equals(extension) || MovParser.isLikelyMov(bytes)) {
+                try {
+                    MovProbeInfo info = MovCodec.decode(bytes, input);
+                    java.util.LinkedHashMap<String, String> tags = new java.util.LinkedHashMap<>();
+                    tags.put("sizeBytes", String.valueOf(size));
+                    if (info.majorBrand() != null && !info.majorBrand().isBlank()) {
+                        tags.put("majorBrand", info.majorBrand());
+                    }
+                    if (info.videoCodec() != null && !info.videoCodec().isBlank()) {
+                        tags.put("videoCodec", info.videoCodec());
+                    }
+                    if (info.audioCodec() != null && !info.audioCodec().isBlank()) {
+                        tags.put("audioCodec", info.audioCodec());
+                    }
+
+                    java.util.ArrayList<StreamInfo> streams = new java.util.ArrayList<>();
+                    if (info.width() != null && info.height() != null && info.width() > 0 && info.height() > 0) {
+                        streams.add(new StreamInfo(0, StreamKind.VIDEO, info.videoCodec() != null ? info.videoCodec() : "unknown", null, null, null, info.width(), info.height(), info.frameRate()));
+                    }
+                    if (info.sampleRate() != null && info.channels() != null && info.sampleRate() > 0 && info.channels() > 0) {
+                        streams.add(new StreamInfo(
+                                streams.size(),
+                                StreamKind.AUDIO,
+                                info.audioCodec() != null ? info.audioCodec() : "unknown",
+                                null,
+                                info.sampleRate(),
+                                info.channels(),
+                                null,
+                                null,
+                                null
+                        ));
+                    }
+
+                    return new ProbeResult(
+                            input,
+                            "video/quicktime",
+                            "mov",
+                            MediaType.VIDEO,
+                            info.durationMillis(),
+                            List.copyOf(streams),
+                            tags
+                    );
+                } catch (CodecMediaException ignored) {
+                    // Fall back to extension-only probe for malformed/partial files.
+                }
+                return new ProbeResult(input, "video/quicktime", "mov", MediaType.VIDEO, null, List.of(), Map.of("sizeBytes", String.valueOf(size)));
+            }
+
             if ("mp4".equals(extension) || "m4a".equals(extension) || Mp4Parser.isLikelyMp4(bytes)) {
                 String outputExt = "m4a".equals(extension) ? "m4a" : "mp4";
                 String mimeType = "m4a".equals(outputExt) ? "audio/mp4" : "video/mp4";
@@ -321,8 +375,55 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
                 return new ProbeResult(input, mimeType, outputExt, mediaType, null, List.of(), Map.of("sizeBytes", String.valueOf(size)));
             }
 
+            if ("webm".equals(extension) || WebmParser.isLikelyWebm(bytes)) {
+                try {
+                    WebmProbeInfo info = WebmCodec.decode(bytes, input);
+                    java.util.LinkedHashMap<String, String> tags = new java.util.LinkedHashMap<>();
+                    tags.put("sizeBytes", String.valueOf(size));
+                    if (info.videoCodec() != null && !info.videoCodec().isBlank()) {
+                        tags.put("videoCodec", info.videoCodec());
+                    }
+                    if (info.audioCodec() != null && !info.audioCodec().isBlank()) {
+                        tags.put("audioCodec", info.audioCodec());
+                    }
+
+                    java.util.ArrayList<StreamInfo> streams = new java.util.ArrayList<>();
+                    if (info.width() != null && info.height() != null && info.width() > 0 && info.height() > 0) {
+                        streams.add(new StreamInfo(0, StreamKind.VIDEO, info.videoCodec() != null ? info.videoCodec() : "unknown", null, null, null, info.width(), info.height(), info.frameRate()));
+                    }
+                    if (info.sampleRate() != null && info.channels() != null && info.sampleRate() > 0 && info.channels() > 0) {
+                        streams.add(new StreamInfo(
+                                streams.size(),
+                                StreamKind.AUDIO,
+                                info.audioCodec() != null ? info.audioCodec() : "unknown",
+                                null,
+                                info.sampleRate(),
+                                info.channels(),
+                                null,
+                                null,
+                                null
+                        ));
+                    }
+
+                    return new ProbeResult(
+                            input,
+                            "video/webm",
+                            "webm",
+                            MediaType.VIDEO,
+                            info.durationMillis(),
+                            List.copyOf(streams),
+                            tags
+                    );
+                } catch (CodecMediaException ignored) {
+                    // Fall back to extension-only probe for malformed/partial files.
+                }
+                return new ProbeResult(input, "video/webm", "webm", MediaType.VIDEO, null, List.of(), Map.of("sizeBytes", String.valueOf(size)));
+            }
+
             String mimeType = switch (extension) {
                 case "mp4" -> "video/mp4";
+                case "mov" -> "video/quicktime";
+                case "webm" -> "video/webm";
                 case "m4a" -> "audio/mp4";
                 case "mp3" -> "audio/mpeg";
                 case "ogg" -> "audio/ogg";
@@ -338,7 +439,7 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
                 default -> "application/octet-stream";
             };
             MediaType mediaType = switch (extension) {
-                case "mp4" -> MediaType.VIDEO;
+                case "mp4", "mov", "webm" -> MediaType.VIDEO;
                 case "m4a", "mp3", "ogg", "wav" -> MediaType.AUDIO;
                 case "png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff", "heic", "heif", "avif" -> MediaType.IMAGE;
                 default -> MediaType.UNKNOWN;
@@ -559,11 +660,23 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
                     } catch (CodecMediaException e) {
                         return new ValidationResult(false, List.of(), List.of("Strict validation failed for jpg/jpeg: " + e.getMessage()));
                     }
+                } else if ("mov".equals(extension)) {
+                    try {
+                        MovParser.parse(bytes);
+                    } catch (CodecMediaException e) {
+                        return new ValidationResult(false, List.of(), List.of("Strict validation failed for mov: " + e.getMessage()));
+                    }
                 } else if ("mp4".equals(extension) || "m4a".equals(extension)) {
                     try {
                         Mp4Parser.parse(bytes);
                     } catch (CodecMediaException e) {
                         return new ValidationResult(false, List.of(), List.of("Strict validation failed for " + extension + ": " + e.getMessage()));
+                    }
+                } else if ("webm".equals(extension)) {
+                    try {
+                        WebmParser.parse(bytes);
+                    } catch (CodecMediaException e) {
+                        return new ValidationResult(false, List.of(), List.of("Strict validation failed for webm: " + e.getMessage()));
                     }
                 } else if ("webp".equals(extension)) {
                     try {
