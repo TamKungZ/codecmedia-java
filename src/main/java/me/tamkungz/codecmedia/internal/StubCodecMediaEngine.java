@@ -376,17 +376,29 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
                     if (info.audioCodec() != null && !info.audioCodec().isBlank()) {
                         tags.put("audioCodec", info.audioCodec());
                     }
+                    if (info.displayAspectRatio() != null && !info.displayAspectRatio().isBlank()) {
+                        tags.put("displayAspectRatio", info.displayAspectRatio());
+                    }
+                    if (info.bitDepth() != null && info.bitDepth() > 0) {
+                        tags.put("bitDepth", String.valueOf(info.bitDepth()));
+                    }
+                    if (info.videoBitrateKbps() != null && info.videoBitrateKbps() > 0) {
+                        tags.put("videoBitrateKbps", String.valueOf(info.videoBitrateKbps()));
+                    }
+                    if (info.audioBitrateKbps() != null && info.audioBitrateKbps() > 0) {
+                        tags.put("audioBitrateKbps", String.valueOf(info.audioBitrateKbps()));
+                    }
 
                     java.util.ArrayList<StreamInfo> streams = new java.util.ArrayList<>();
                     if (info.width() != null && info.height() != null && info.width() > 0 && info.height() > 0) {
-                        streams.add(new StreamInfo(0, StreamKind.VIDEO, info.videoCodec() != null ? info.videoCodec() : "unknown", null, null, null, info.width(), info.height(), info.frameRate()));
+                        streams.add(new StreamInfo(0, StreamKind.VIDEO, info.videoCodec() != null ? info.videoCodec() : "unknown", info.videoBitrateKbps(), null, null, info.width(), info.height(), info.frameRate()));
                     }
                     if (info.sampleRate() != null && info.channels() != null && info.sampleRate() > 0 && info.channels() > 0) {
                         streams.add(new StreamInfo(
                                 streams.size(),
                                 StreamKind.AUDIO,
                                 info.audioCodec() != null ? info.audioCodec() : "unknown",
-                                null,
+                                info.audioBitrateKbps(),
                                 info.sampleRate(),
                                 info.channels(),
                                 null,
@@ -421,12 +433,51 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
                     if (info.majorBrand() != null && !info.majorBrand().isBlank()) {
                         tags.put("majorBrand", info.majorBrand());
                     }
+                    if (info.videoCodec() != null && !info.videoCodec().isBlank()) {
+                        tags.put("videoCodec", info.videoCodec());
+                    }
+                    if (info.audioCodec() != null && !info.audioCodec().isBlank()) {
+                        tags.put("audioCodec", info.audioCodec());
+                    }
+                    if (info.displayAspectRatio() != null && !info.displayAspectRatio().isBlank()) {
+                        tags.put("displayAspectRatio", info.displayAspectRatio());
+                    }
+                    if (info.bitDepth() != null && info.bitDepth() > 0) {
+                        tags.put("bitDepth", String.valueOf(info.bitDepth()));
+                    }
+                    if (info.videoBitrateKbps() != null && info.videoBitrateKbps() > 0) {
+                        tags.put("videoBitrateKbps", String.valueOf(info.videoBitrateKbps()));
+                    }
+                    if (info.audioBitrateKbps() != null && info.audioBitrateKbps() > 0) {
+                        tags.put("audioBitrateKbps", String.valueOf(info.audioBitrateKbps()));
+                    }
 
-                    List<StreamInfo> streams;
+                    java.util.ArrayList<StreamInfo> streams = new java.util.ArrayList<>();
                     if (mediaType == MediaType.VIDEO && info.width() != null && info.height() != null && info.width() > 0 && info.height() > 0) {
-                        streams = List.of(new StreamInfo(0, StreamKind.VIDEO, "h264/unknown", null, null, null, info.width(), info.height(), null));
-                    } else {
-                        streams = List.of();
+                        streams.add(new StreamInfo(
+                                streams.size(),
+                                StreamKind.VIDEO,
+                                info.videoCodec() != null ? info.videoCodec() : "unknown",
+                                info.videoBitrateKbps(),
+                                null,
+                                null,
+                                info.width(),
+                                info.height(),
+                                info.frameRate()
+                        ));
+                    }
+                    if (info.sampleRate() != null && info.channels() != null && info.sampleRate() > 0 && info.channels() > 0) {
+                        streams.add(new StreamInfo(
+                                streams.size(),
+                                StreamKind.AUDIO,
+                                info.audioCodec() != null ? info.audioCodec() : "unknown",
+                                info.audioBitrateKbps(),
+                                info.sampleRate(),
+                                info.channels(),
+                                null,
+                                null,
+                                null
+                        ));
                     }
 
                     return new ProbeResult(
@@ -435,7 +486,7 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
                             outputExt,
                             mediaType,
                             info.durationMillis(),
-                            streams,
+                            List.copyOf(streams),
                             tags
                     );
                 } catch (CodecMediaException ignored) {
@@ -455,17 +506,29 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
                     if (info.audioCodec() != null && !info.audioCodec().isBlank()) {
                         tags.put("audioCodec", info.audioCodec());
                     }
+                    if (info.displayAspectRatio() != null && !info.displayAspectRatio().isBlank()) {
+                        tags.put("displayAspectRatio", info.displayAspectRatio());
+                    }
+                    if (info.bitDepth() != null && info.bitDepth() > 0) {
+                        tags.put("bitDepth", String.valueOf(info.bitDepth()));
+                    }
+                    if (info.videoBitrateKbps() != null && info.videoBitrateKbps() > 0) {
+                        tags.put("videoBitrateKbps", String.valueOf(info.videoBitrateKbps()));
+                    }
+                    if (info.audioBitrateKbps() != null && info.audioBitrateKbps() > 0) {
+                        tags.put("audioBitrateKbps", String.valueOf(info.audioBitrateKbps()));
+                    }
 
                     java.util.ArrayList<StreamInfo> streams = new java.util.ArrayList<>();
                     if (info.width() != null && info.height() != null && info.width() > 0 && info.height() > 0) {
-                        streams.add(new StreamInfo(0, StreamKind.VIDEO, info.videoCodec() != null ? info.videoCodec() : "unknown", null, null, null, info.width(), info.height(), info.frameRate()));
+                        streams.add(new StreamInfo(0, StreamKind.VIDEO, info.videoCodec() != null ? info.videoCodec() : "unknown", info.videoBitrateKbps(), null, null, info.width(), info.height(), info.frameRate()));
                     }
                     if (info.sampleRate() != null && info.channels() != null && info.sampleRate() > 0 && info.channels() > 0) {
                         streams.add(new StreamInfo(
                                 streams.size(),
                                 StreamKind.AUDIO,
                                 info.audioCodec() != null ? info.audioCodec() : "unknown",
-                                null,
+                                info.audioBitrateKbps(),
                                 info.sampleRate(),
                                 info.channels(),
                                 null,

@@ -28,6 +28,7 @@ CodecMedia is a Java library for media probing, validation, metadata sidecar per
   - MP4 (basic ISO BMFF parsing)
   - WebM (EBML container parsing)
 - Validation with size limits and strict parser checks for MP3/OGG/WAV/PNG/JPEG/WebP/BMP/TIFF/HEIC/HEIF/AVIF/MOV/MP4/WebM
+- MOV/MP4/WebM probe tags now include richer video metadata when present (for example `displayAspectRatio`, `bitDepth`, `videoBitrateKbps`, `audioBitrateKbps`)
 - Metadata read/write with sidecar persistence (`.codecmedia.properties`)
 - In-Java extraction and conversion file operations
 - Image-to-image conversion in Java for: `png`, `jpg`/`jpeg`, `webp`, `bmp`, `tif`/`tiff`, `heic`/`heif`
@@ -101,3 +102,4 @@ This project is licensed under the Apache License 2.0.
 ---
 
 *by TamKungZ_*
+

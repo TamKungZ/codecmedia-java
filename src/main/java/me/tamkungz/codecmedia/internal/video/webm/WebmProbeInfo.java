@@ -8,7 +8,11 @@ public record WebmProbeInfo(
         String audioCodec,
         Integer sampleRate,
         Integer channels,
-        Double frameRate
+        Double frameRate,
+        Integer videoBitrateKbps,
+        Integer audioBitrateKbps,
+        Integer bitDepth,
+        String displayAspectRatio
 ) {
 }
 

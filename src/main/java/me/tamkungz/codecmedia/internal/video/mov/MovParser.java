@@ -37,7 +37,12 @@ public final class MovParser {
         String audioCodec = null;
         Integer sampleRate = null;
         Integer channels = null;
+        Integer bitDepth = null;
+        Integer videoBitrateKbps = null;
+        Integer audioBitrateKbps = null;
         Long currentTrackTimescale = null;
+        Long currentTrackDuration = null;
+        String currentTrackType = null;
 
         int offset = 0;
         while (offset + 8 <= bytes.length) {
@@ -69,9 +74,12 @@ public final class MovParser {
             if ("mvhd".equals(boxType) && durationMillis == null) {
                 durationMillis = parseMvhdDuration(bytes, payloadStart, payloadSize);
             } else if ("mdhd".equals(boxType)) {
-                Long parsedTimescale = parseMdhdTimescale(bytes, payloadStart, payloadSize);
-                if (parsedTimescale != null && parsedTimescale > 0) {
-                    currentTrackTimescale = parsedTimescale;
+                MdhdInfo mdhd = parseMdhdInfo(bytes, payloadStart, payloadSize);
+                if (mdhd.timescale() != null && mdhd.timescale() > 0) {
+                    currentTrackTimescale = mdhd.timescale();
+                }
+                if (mdhd.duration() != null && mdhd.duration() > 0) {
+                    currentTrackDuration = mdhd.duration();
                 }
             } else if ("tkhd".equals(boxType) && (width == null || height == null)) {
                 int[] wh = parseTkhdDimensions(bytes, payloadStart, payloadSize);
@@ -79,6 +87,8 @@ public final class MovParser {
                     width = wh[0];
                     height = wh[1];
                 }
+            } else if ("hdlr".equals(boxType)) {
+                currentTrackType = parseHdlrType(bytes, payloadStart, payloadSize);
             } else if ("stsd".equals(boxType)) {
                 SampleDescription info = parseStsd(bytes, payloadStart, payloadSize);
                 if (info.videoCodec != null && videoCodec == null) {
@@ -93,11 +103,47 @@ public final class MovParser {
                 if (info.channels != null && channels == null) {
                     channels = info.channels;
                 }
+                if (info.bitDepth != null && bitDepth == null) {
+                    bitDepth = info.bitDepth;
+                }
             } else if ("stts".equals(boxType) && frameRate == null) {
                 frameRate = parseFrameRateFromStts(bytes, payloadStart, payloadSize, currentTrackTimescale);
+            } else if ("btrt".equals(boxType)) {
+                Integer avg = parseAverageBitrateKbpsFromBtrt(bytes, payloadStart, payloadSize);
+                if (avg != null) {
+                    if ("vide".equals(currentTrackType) && videoBitrateKbps == null) {
+                        videoBitrateKbps = avg;
+                    } else if ("soun".equals(currentTrackType) && audioBitrateKbps == null) {
+                        audioBitrateKbps = avg;
+                    }
+                }
+            } else if ("stsz".equals(boxType) && currentTrackDuration != null && currentTrackTimescale != null) {
+                Integer fromStsz = parseBitrateFromStsz(bytes, payloadStart, payloadSize, currentTrackDuration, currentTrackTimescale);
+                if (fromStsz != null) {
+                    if ("vide".equals(currentTrackType) && videoBitrateKbps == null) {
+                        videoBitrateKbps = fromStsz;
+                    } else if ("soun".equals(currentTrackType) && audioBitrateKbps == null) {
+                        audioBitrateKbps = fromStsz;
+                    }
+                }
             }
 
             offset += (int) boxSize;
+        }
+
+        String displayAspectRatio = null;
+        if (width != null && height != null && width > 0 && height > 0) {
+            int gcd = gcd(width, height);
+            displayAspectRatio = (width / gcd) + ":" + (height / gcd);
+        }
+
+        if (durationMillis != null && durationMillis > 0) {
+            int totalKbps = (int) (((long) bytes.length * 8L * 1000L) / (durationMillis * 1000L));
+            if (videoBitrateKbps == null && width != null && height != null && width > 0 && height > 0) {
+                videoBitrateKbps = totalKbps;
+            } else if (audioBitrateKbps == null && (sampleRate != null || channels != null)) {
+                audioBitrateKbps = totalKbps;
+            }
         }
 
         return new MovProbeInfo(
@@ -109,7 +155,11 @@ public final class MovParser {
                 audioCodec,
                 sampleRate,
                 channels,
-                frameRate
+                frameRate,
+                videoBitrateKbps,
+                audioBitrateKbps,
+                bitDepth,
+                displayAspectRatio
         );
     }
 
@@ -165,26 +215,35 @@ public final class MovParser {
         return new int[] {widthFixed >>> 16, heightFixed >>> 16};
     }
 
-    private static Long parseMdhdTimescale(byte[] bytes, int offset, int size) throws CodecMediaException {
+    private static MdhdInfo parseMdhdInfo(byte[] bytes, int offset, int size) throws CodecMediaException {
         if (size < 16) {
-            return null;
+            return new MdhdInfo(null, null);
         }
         int version = bytes[offset] & 0xFF;
         if (version == 0) {
             if (size < 20) {
-                return null;
+                return new MdhdInfo(null, null);
             }
             long timescale = readUInt32(bytes, offset + 12);
-            return timescale > 0 ? timescale : null;
+            long duration = readUInt32(bytes, offset + 16);
+            return new MdhdInfo(timescale > 0 ? timescale : null, duration > 0 ? duration : null);
         }
         if (version == 1) {
             if (size < 32) {
-                return null;
+                return new MdhdInfo(null, null);
             }
             long timescale = readUInt32(bytes, offset + 20);
-            return timescale > 0 ? timescale : null;
+            long duration = readUInt64(bytes, offset + 24);
+            return new MdhdInfo(timescale > 0 ? timescale : null, duration > 0 ? duration : null);
         }
-        return null;
+        return new MdhdInfo(null, null);
+    }
+
+    private static String parseHdlrType(byte[] bytes, int offset, int size) {
+        if (size < 12 || offset + 12 > bytes.length) {
+            return null;
+        }
+        return readAscii(bytes, offset + 8, 4);
     }
 
     private static SampleDescription parseStsd(byte[] bytes, int offset, int size) throws CodecMediaException {
@@ -210,13 +269,24 @@ public final class MovParser {
 
             if (isVideoFourCc(format) && out.videoCodec == null) {
                 out.videoCodec = normalizeCodec(format);
+                if (entrySize >= 78) {
+                    int depthOffset = cursor + 74;
+                    if (depthOffset + 2 <= cursor + entrySize) {
+                        int depth = readUInt16(bytes, depthOffset);
+                        if (depth > 0 && depth < 64) {
+                            out.bitDepth = depth;
+                        }
+                    }
+                }
             } else if (isAudioFourCc(format) && out.audioCodec == null) {
                 out.audioCodec = normalizeCodec(format);
                 if (entrySize >= 36) {
                     int channelCountOffset = cursor + 16;
+                    int sampleSizeOffset = cursor + 18;
                     int sampleRateOffset = cursor + 24;
                     if (sampleRateOffset + 4 <= cursor + entrySize) {
                         out.channels = readUInt16(bytes, channelCountOffset);
+                        out.bitDepth = readUInt16(bytes, sampleSizeOffset);
                         int srFixed = (int) readUInt32(bytes, sampleRateOffset);
                         out.sampleRate = srFixed >>> 16;
                     }
@@ -251,6 +321,58 @@ public final class MovParser {
             return null;
         }
         return trackTimescale.doubleValue() / sampleDelta;
+    }
+
+    private static Integer parseAverageBitrateKbpsFromBtrt(byte[] bytes, int offset, int size) throws CodecMediaException {
+        if (size < 12) {
+            return null;
+        }
+        long avgBitrate = readUInt32(bytes, offset + 8);
+        if (avgBitrate <= 0) {
+            return null;
+        }
+        return (int) Math.max(1L, Math.round(avgBitrate / 1000.0d));
+    }
+
+    private static Integer parseBitrateFromStsz(byte[] bytes, int offset, int size, long duration, long timescale) throws CodecMediaException {
+        if (size < 12 || duration <= 0 || timescale <= 0) {
+            return null;
+        }
+        long sampleSize = readUInt32(bytes, offset + 4);
+        long sampleCount = readUInt32(bytes, offset + 8);
+
+        long totalBytes = 0;
+        if (sampleSize > 0) {
+            totalBytes = sampleSize * sampleCount;
+        } else {
+            int cursor = offset + 12;
+            int limit = offset + size;
+            for (long i = 0; i < sampleCount && cursor + 4 <= limit; i++) {
+                totalBytes += readUInt32(bytes, cursor);
+                cursor += 4;
+            }
+        }
+        if (totalBytes <= 0) {
+            return null;
+        }
+
+        double durationSeconds = duration / (double) timescale;
+        if (durationSeconds <= 0.0d) {
+            return null;
+        }
+        long bps = Math.round((totalBytes * 8.0d) / durationSeconds);
+        return (int) Math.max(1L, Math.round(bps / 1000.0d));
+    }
+
+    private static int gcd(int a, int b) {
+        int x = Math.abs(a);
+        int y = Math.abs(b);
+        while (y != 0) {
+            int t = x % y;
+            x = y;
+            y = t;
+        }
+        return x == 0 ? 1 : x;
     }
 
     private static boolean isVideoFourCc(String fourcc) {
@@ -340,6 +462,10 @@ public final class MovParser {
         String audioCodec;
         Integer sampleRate;
         Integer channels;
+        Integer bitDepth;
+    }
+
+    private record MdhdInfo(Long timescale, Long duration) {
     }
 }
 

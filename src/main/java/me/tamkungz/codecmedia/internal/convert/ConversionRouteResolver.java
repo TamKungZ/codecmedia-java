@@ -8,6 +8,9 @@ public final class ConversionRouteResolver {
     }
 
     public static ConversionRoute resolve(MediaType source, MediaType target) {
+        if (source == null || target == null) {
+            return ConversionRoute.UNSUPPORTED;
+        }
         if (source == MediaType.AUDIO && target == MediaType.AUDIO) {
             return ConversionRoute.AUDIO_TO_AUDIO;
         }

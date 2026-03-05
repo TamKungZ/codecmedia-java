@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.4] - 2026-03-05
+
+### Added
+- Added richer MOV probe fields in [`MovProbeInfo`](src/main/java/me/tamkungz/codecmedia/internal/video/mov/MovProbeInfo.java): `videoBitrateKbps`, `audioBitrateKbps`, `bitDepth`, and `displayAspectRatio`.
+- Added richer MP4 probe fields in [`Mp4ProbeInfo`](src/main/java/me/tamkungz/codecmedia/internal/video/mp4/Mp4ProbeInfo.java): codec/audio stream details, frame rate, bitrate fields, bit depth, and display aspect ratio.
+- Added richer WebM probe fields in [`WebmProbeInfo`](src/main/java/me/tamkungz/codecmedia/internal/video/webm/WebmProbeInfo.java): per-track bitrate fields and display aspect ratio.
+
+### Changed
+- Enhanced MOV parsing in [`MovParser`](src/main/java/me/tamkungz/codecmedia/internal/video/mov/MovParser.java) with deeper BMFF track metadata extraction (`hdlr`, `mdhd`, `stsd`, `btrt`, `stsz`) and fallback bitrate estimation.
+- Enhanced MP4 parsing in [`Mp4Parser`](src/main/java/me/tamkungz/codecmedia/internal/video/mp4/Mp4Parser.java) to extract video/audio codec, sample rate, channels, frame rate, bit depth, bitrate, and aspect ratio.
+- Enhanced WebM parsing in [`WebmParser`](src/main/java/me/tamkungz/codecmedia/internal/video/webm/WebmParser.java) to extract track bitrate when present and compute fallback bitrate/aspect ratio values.
+- Updated stream/tag mapping in [`StubCodecMediaEngine`](src/main/java/me/tamkungz/codecmedia/internal/StubCodecMediaEngine.java) so MOV/MP4/WebM probe results now expose richer stream bitrate and container tags (`displayAspectRatio`, `bitDepth`, `videoBitrateKbps`, `audioBitrateKbps`).
+
+### Verified
+- Confirmed test stability after video parser improvements with `mvn test`.
+
 ## [1.0.3] - 2026-03-05
 
 ### Added

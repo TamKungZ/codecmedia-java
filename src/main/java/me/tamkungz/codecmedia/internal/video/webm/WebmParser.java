@@ -39,6 +39,8 @@ public final class WebmParser {
         Integer sampleRate = null;
         Integer channels = null;
         Double frameRate = null;
+        Integer videoBitrateKbps = null;
+        Integer audioBitrateKbps = null;
 
         int cursor = 0;
         while (cursor + 2 < bytes.length) {
@@ -56,10 +58,12 @@ public final class WebmParser {
                     height = t.height != null ? t.height : height;
                     videoCodec = t.codec != null ? t.codec : videoCodec;
                     frameRate = t.frameRate != null ? t.frameRate : frameRate;
+                    videoBitrateKbps = t.bitrateKbps != null ? t.bitrateKbps : videoBitrateKbps;
                 } else if (t.trackType != null && t.trackType == 2) {
                     audioCodec = t.codec != null ? t.codec : audioCodec;
                     sampleRate = t.sampleRate != null ? t.sampleRate : sampleRate;
                     channels = t.channels != null ? t.channels : channels;
+                    audioBitrateKbps = t.bitrateKbps != null ? t.bitrateKbps : audioBitrateKbps;
                 }
                 cursor = payloadEnd;
                 continue;
@@ -67,7 +71,35 @@ public final class WebmParser {
             cursor++;
         }
 
-        return new WebmProbeInfo(durationMillis, width, height, videoCodec, audioCodec, sampleRate, channels, frameRate);
+        String displayAspectRatio = null;
+        if (width != null && height != null && width > 0 && height > 0) {
+            int gcd = gcd(width, height);
+            displayAspectRatio = (width / gcd) + ":" + (height / gcd);
+        }
+
+        if (durationMillis != null && durationMillis > 0) {
+            int totalKbps = (int) (((long) bytes.length * 8L * 1000L) / (durationMillis * 1000L));
+            if (videoBitrateKbps == null && width != null && height != null && width > 0 && height > 0) {
+                videoBitrateKbps = totalKbps;
+            } else if (audioBitrateKbps == null && (sampleRate != null || channels != null)) {
+                audioBitrateKbps = totalKbps;
+            }
+        }
+
+        return new WebmProbeInfo(
+                durationMillis,
+                width,
+                height,
+                videoCodec,
+                audioCodec,
+                sampleRate,
+                channels,
+                frameRate,
+                videoBitrateKbps,
+                audioBitrateKbps,
+                null,
+                displayAspectRatio
+        );
     }
 
     private static TrackEntry parseTrackEntry(byte[] bytes, int offset, int end) throws CodecMediaException {
@@ -101,6 +133,11 @@ public final class WebmParser {
                 out.channels = readUnsigned(bytes, valueOffset, valueEnd - valueOffset);
             } else if (id == 0xB5) { // SamplingFrequency float
                 out.sampleRate = parseEbmlFloatAsInt(bytes, valueOffset, valueEnd - valueOffset);
+            } else if (id == 0x258688) { // Track default bitrate (Bit/s)
+                Integer bps = readUnsignedLongAsInt(bytes, valueOffset, valueEnd - valueOffset);
+                if (bps != null && bps > 0) {
+                    out.bitrateKbps = (int) Math.max(1L, Math.round(bps / 1000.0d));
+                }
             } else if (id == 0x23E383) {
                 // DefaultDuration with 3-byte ID (0x23E383)
                 out.frameRate = parseDefaultDurationFrameRate(bytes, valueOffset, (int) valueSize, end);
@@ -210,6 +247,31 @@ public final class WebmParser {
         return value;
     }
 
+    private static Integer readUnsignedLongAsInt(byte[] bytes, int offset, int size) {
+        if (size <= 0 || size > 8 || offset + size > bytes.length) {
+            return null;
+        }
+        long value = 0;
+        for (int i = 0; i < size; i++) {
+            value = (value << 8) | (bytes[offset + i] & 0xFFL);
+        }
+        if (value <= 0 || value > Integer.MAX_VALUE) {
+            return null;
+        }
+        return (int) value;
+    }
+
+    private static int gcd(int a, int b) {
+        int x = Math.abs(a);
+        int y = Math.abs(b);
+        while (y != 0) {
+            int t = x % y;
+            x = y;
+            y = t;
+        }
+        return x == 0 ? 1 : x;
+    }
+
     private static int indexOf(byte[] haystack, byte[] needle, int from) {
         if (needle.length == 0 || haystack.length < needle.length || from < 0) {
             return -1;
@@ -294,6 +356,7 @@ public final class WebmParser {
         Integer sampleRate;
         Integer channels;
         Double frameRate;
+        Integer bitrateKbps;
     }
 }
 
