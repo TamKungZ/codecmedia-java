@@ -7,9 +7,15 @@
 
 CodecMedia is a Java library for media probing, validation, metadata sidecar persistence, audio extraction, playback workflow simulation, and conversion routing.
 
+
 <p align="center">
   <img src="https://codecmedia.tamkungz.me/CodecMedia_Full_Logo.png" width="70%" alt="CodecMedia Logo">
 </p>
+
+## Approaches:
+- Zero-Dependency
+- Self-Contained
+- Multi-Platform
 
 ## Features
 
