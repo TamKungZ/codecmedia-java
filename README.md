@@ -13,8 +13,11 @@ CodecMedia is a Java library for media probing, validation, metadata sidecar per
 - Media engine facade via `CodecMedia.createDefault()`
 - Probing support for:
   - MP3
-  - OGG/Vorbis
+  - OGG/Vorbis/Opus
   - WAV (RIFF/WAVE)
+  - AIFF/AIF/AIFC (COMM-based parsing)
+  - M4A (MP4 audio profile)
+  - FLAC (STREAMINFO parsing)
   - PNG
   - JPEG
   - WebP
@@ -45,6 +48,7 @@ CodecMedia is a Java library for media probing, validation, metadata sidecar per
 ## Notes and Limitations
 
 - Current probing focuses on **technical media info** (mime/type/streams/basic tags).
+- Probe routing now performs a lightweight header-prefix sniff before full decode to reduce unnecessary full-file reads for clearly unsupported/unknown inputs.
 - `readMetadata` currently uses sidecar metadata persistence; it is **not** a full embedded tag extractor (for example ID3 album art/APIC).
 - Audio-to-audio conversion is not implemented yet for real transcode cases (for example `mp3 -> ogg`).
 - The only temporary audio conversion path is a stub `wav <-> pcm` route.

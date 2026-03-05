@@ -26,5 +26,39 @@ class Mp3ParserTest {
         assertEquals(2, info.channels());
         assertEquals(BitrateMode.CBR, info.bitrateMode());
     }
+
+    @Test
+    void shouldDetectVbrWhenFrameBitratesDiffer() throws Exception {
+        byte[] frame128 = createFrame(new byte[] {(byte) 0xFF, (byte) 0xFB, (byte) 0x90, 0x00}, 417);
+        byte[] frame64 = createFrame(new byte[] {(byte) 0xFF, (byte) 0xFB, (byte) 0x50, 0x00}, 208);
+
+        byte[] data = new byte[frame128.length + frame64.length];
+        System.arraycopy(frame128, 0, data, 0, frame128.length);
+        System.arraycopy(frame64, 0, data, frame128.length, frame64.length);
+
+        Mp3ProbeInfo info = Mp3Parser.parse(data);
+
+        assertEquals(44100, info.sampleRate());
+        assertEquals(BitrateMode.VBR, info.bitrateMode());
+    }
+
+    @Test
+    void shouldParseMonoFromChannelMode() throws Exception {
+        byte[] frame = createFrame(new byte[] {(byte) 0xFF, (byte) 0xFB, (byte) 0x90, (byte) 0xC0}, 417);
+        byte[] data = new byte[frame.length * 2];
+        System.arraycopy(frame, 0, data, 0, frame.length);
+        System.arraycopy(frame, 0, data, frame.length, frame.length);
+
+        Mp3ProbeInfo info = Mp3Parser.parse(data);
+
+        assertEquals(1, info.channels());
+        assertEquals(BitrateMode.CBR, info.bitrateMode());
+    }
+
+    private static byte[] createFrame(byte[] header, int frameLength) {
+        byte[] frame = new byte[frameLength];
+        System.arraycopy(header, 0, frame, 0, header.length);
+        return frame;
+    }
 }
 

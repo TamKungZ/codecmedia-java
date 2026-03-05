@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2026-03-05
+
+### Added
+- Added OGG Opus identification/probing support alongside Vorbis in [`OggParser`](src/main/java/me/tamkungz/codecmedia/internal/audio/ogg/OggParser.java).
+- Added AIFF/AIF/AIFC probing support with new parser/codec in [`AiffParser`](src/main/java/me/tamkungz/codecmedia/internal/audio/aiff/AiffParser.java) and [`AiffCodec`](src/main/java/me/tamkungz/codecmedia/internal/audio/aiff/AiffCodec.java).
+- Added FLAC probing support with STREAMINFO parsing in [`FlacParser`](src/main/java/me/tamkungz/codecmedia/internal/audio/flac/FlacParser.java) and [`FlacCodec`](src/main/java/me/tamkungz/codecmedia/internal/audio/flac/FlacCodec.java).
+- Added parser test coverage for MP3 VBR and mono channel-mode paths in [`Mp3ParserTest`](src/test/java/me/tamkungz/codecmedia/internal/audio/mp3/Mp3ParserTest.java).
+- Added parser test coverage for OGG Opus identification in [`OggParserTest`](src/test/java/me/tamkungz/codecmedia/internal/audio/ogg/OggParserTest.java).
+- Added WAV parser synthetic profile tests (mono/stereo, sample-rate, bit-depth combinations) in [`WavParserTest`](src/test/java/me/tamkungz/codecmedia/internal/audio/wav/WavParserTest.java).
+- Added parser test coverage for AIFF probing in [`AiffParserTest`](src/test/java/me/tamkungz/codecmedia/internal/audio/aiff/AiffParserTest.java).
+- Added facade test coverage for `.m4a` probe/strict-validate flows in [`CodecMediaFacadeTest`](src/test/java/me/tamkungz/codecmedia/CodecMediaFacadeTest.java).
+- Added parser/facade test coverage for `.flac` in [`FlacParserTest`](src/test/java/me/tamkungz/codecmedia/internal/audio/flac/FlacParserTest.java) and [`CodecMediaFacadeTest`](src/test/java/me/tamkungz/codecmedia/CodecMediaFacadeTest.java).
+
+### Changed
+- Improved probe routing in [`StubCodecMediaEngine`](src/main/java/me/tamkungz/codecmedia/internal/StubCodecMediaEngine.java) to perform lightweight prefix-based type sniffing before full-file decode, reducing unnecessary full reads for unsupported/unknown inputs.
+- Extended probe and strict validation routing in [`StubCodecMediaEngine`](src/main/java/me/tamkungz/codecmedia/internal/StubCodecMediaEngine.java) to include AIFF/AIF/AIFC.
+- Extended probe and strict validation routing in [`StubCodecMediaEngine`](src/main/java/me/tamkungz/codecmedia/internal/StubCodecMediaEngine.java) to include FLAC.
+- Expanded MP4 signature acceptance for M4A family brands in [`Mp4Parser.isLikelyMp4()`](src/main/java/me/tamkungz/codecmedia/internal/video/mp4/Mp4Parser.java).
+- Updated feature notes in [`README.md`](README.md) to reflect OGG Vorbis/Opus probing support and prefix-sniff probe behavior.
+
 ## [1.0.2] - 2026-03-02
 
 ### Added

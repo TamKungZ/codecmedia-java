@@ -19,6 +19,18 @@ class OggParserTest {
         assertEquals(BitrateMode.UNKNOWN, info.bitrateMode());
     }
 
+    @Test
+    void shouldParseOpusIdentificationFromFirstOggPage() throws Exception {
+        byte[] data = createMinimalOpusOgg();
+
+        OggProbeInfo info = OggParser.parse(data);
+
+        assertEquals("opus", info.codec());
+        assertEquals(2, info.channels());
+        assertEquals(48000, info.sampleRate());
+        assertEquals(BitrateMode.VBR, info.bitrateMode());
+    }
+
     private static byte[] createMinimalVorbisOgg() {
         int payloadSize = 30;
         byte[] data = new byte[27 + 1 + payloadSize];
@@ -69,6 +81,55 @@ class OggParserTest {
 
         data[p + 28] = (byte) 0xB0;
         data[p + 29] = 1;
+
+        return data;
+    }
+
+    private static byte[] createMinimalOpusOgg() {
+        int payloadSize = 19;
+        byte[] data = new byte[27 + 1 + payloadSize];
+
+        data[0] = 'O';
+        data[1] = 'g';
+        data[2] = 'g';
+        data[3] = 'S';
+        data[4] = 0; // version
+        data[5] = 2; // BOS
+
+        long granule = 0;
+        for (int i = 0; i < 8; i++) {
+            data[6 + i] = (byte) ((granule >>> (8 * i)) & 0xFF);
+        }
+
+        int serial = 1;
+        data[14] = (byte) (serial & 0xFF);
+
+        data[26] = 1; // segment count
+        data[27] = (byte) payloadSize;
+
+        int p = 28;
+        data[p] = 'O';
+        data[p + 1] = 'p';
+        data[p + 2] = 'u';
+        data[p + 3] = 's';
+        data[p + 4] = 'H';
+        data[p + 5] = 'e';
+        data[p + 6] = 'a';
+        data[p + 7] = 'd';
+        data[p + 8] = 1; // version
+        data[p + 9] = 2; // channels
+        data[p + 10] = 0; // pre-skip LE
+        data[p + 11] = 0;
+
+        int sampleRate = 48000;
+        data[p + 12] = (byte) (sampleRate & 0xFF);
+        data[p + 13] = (byte) ((sampleRate >>> 8) & 0xFF);
+        data[p + 14] = (byte) ((sampleRate >>> 16) & 0xFF);
+        data[p + 15] = (byte) ((sampleRate >>> 24) & 0xFF);
+
+        data[p + 16] = 0; // output gain LE
+        data[p + 17] = 0;
+        data[p + 18] = 0; // channel mapping family
 
         return data;
     }

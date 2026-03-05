@@ -16,6 +16,12 @@ import java.util.TreeMap;
 
 import me.tamkungz.codecmedia.CodecMediaEngine;
 import me.tamkungz.codecmedia.CodecMediaException;
+import me.tamkungz.codecmedia.internal.audio.aiff.AiffCodec;
+import me.tamkungz.codecmedia.internal.audio.aiff.AiffParser;
+import me.tamkungz.codecmedia.internal.audio.aiff.AiffProbeInfo;
+import me.tamkungz.codecmedia.internal.audio.flac.FlacCodec;
+import me.tamkungz.codecmedia.internal.audio.flac.FlacParser;
+import me.tamkungz.codecmedia.internal.audio.flac.FlacProbeInfo;
 import me.tamkungz.codecmedia.internal.audio.mp3.Mp3Codec;
 import me.tamkungz.codecmedia.internal.audio.mp3.Mp3Parser;
 import me.tamkungz.codecmedia.internal.audio.mp3.Mp3ProbeInfo;
@@ -40,12 +46,12 @@ import me.tamkungz.codecmedia.internal.image.tiff.TiffParser;
 import me.tamkungz.codecmedia.internal.image.tiff.TiffProbeInfo;
 import me.tamkungz.codecmedia.internal.image.webp.WebpParser;
 import me.tamkungz.codecmedia.internal.image.webp.WebpProbeInfo;
-import me.tamkungz.codecmedia.internal.video.mp4.Mp4Codec;
-import me.tamkungz.codecmedia.internal.video.mp4.Mp4Parser;
-import me.tamkungz.codecmedia.internal.video.mp4.Mp4ProbeInfo;
 import me.tamkungz.codecmedia.internal.video.mov.MovCodec;
 import me.tamkungz.codecmedia.internal.video.mov.MovParser;
 import me.tamkungz.codecmedia.internal.video.mov.MovProbeInfo;
+import me.tamkungz.codecmedia.internal.video.mp4.Mp4Codec;
+import me.tamkungz.codecmedia.internal.video.mp4.Mp4Parser;
+import me.tamkungz.codecmedia.internal.video.mp4.Mp4ProbeInfo;
 import me.tamkungz.codecmedia.internal.video.webm.WebmCodec;
 import me.tamkungz.codecmedia.internal.video.webm.WebmParser;
 import me.tamkungz.codecmedia.internal.video.webm.WebmProbeInfo;
@@ -69,6 +75,7 @@ import me.tamkungz.codecmedia.options.ValidationOptions;
 public final class StubCodecMediaEngine implements CodecMediaEngine {
 
     private static final long STRICT_VALIDATION_MAX_BYTES = 32L * 1024L * 1024L;
+    private static final int PROBE_PREFIX_BYTES = 128 * 1024;
     private final ConversionHub conversionHub = new DefaultConversionHub();
 
     @Override
@@ -83,9 +90,29 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
 
         try {
             long size = Files.size(input);
+            byte[] prefix = readProbePrefix(input);
+            boolean likelyMp3 = "mp3".equals(extension) || isLikelyMp3(prefix);
+            boolean likelyOgg = "ogg".equals(extension) || isLikelyOgg(prefix);
+            boolean likelyWav = "wav".equals(extension) || WavParser.isLikelyWav(prefix);
+            boolean likelyAiff = "aif".equals(extension) || "aiff".equals(extension) || "aifc".equals(extension) || AiffParser.isLikelyAiff(prefix);
+            boolean likelyFlac = "flac".equals(extension) || FlacParser.isLikelyFlac(prefix);
+            boolean likelyPng = "png".equals(extension) || PngParser.isLikelyPng(prefix);
+            boolean likelyJpeg = "jpg".equals(extension) || "jpeg".equals(extension) || JpegParser.isLikelyJpeg(prefix);
+            boolean likelyWebp = "webp".equals(extension) || WebpParser.isLikelyWebp(prefix);
+            boolean likelyBmp = "bmp".equals(extension) || BmpParser.isLikelyBmp(prefix);
+            boolean likelyTiff = "tif".equals(extension) || "tiff".equals(extension) || TiffParser.isLikelyTiff(prefix);
+            boolean likelyHeif = "heic".equals(extension) || "heif".equals(extension) || "avif".equals(extension) || HeifParser.isLikelyHeif(prefix);
+            boolean likelyMov = "mov".equals(extension) || MovParser.isLikelyMov(prefix);
+            boolean likelyMp4 = "mp4".equals(extension) || "m4a".equals(extension) || Mp4Parser.isLikelyMp4(prefix);
+            boolean likelyWebm = "webm".equals(extension) || WebmParser.isLikelyWebm(prefix);
+
+            if (!(likelyMp3 || likelyOgg || likelyWav || likelyAiff || likelyFlac || likelyPng || likelyJpeg || likelyWebp || likelyBmp || likelyTiff || likelyHeif || likelyMov || likelyMp4 || likelyWebm)) {
+                return new ProbeResult(input, mimeTypeByExtension(extension), extension, mediaTypeByExtension(extension), null, List.of(), Map.of("sizeBytes", String.valueOf(size)));
+            }
+
             byte[] bytes = Files.readAllBytes(input);
 
-            if ("mp3".equals(extension) || isLikelyMp3(bytes)) {
+            if (likelyMp3) {
                 if (bytes.length >= 4) {
                     try {
                         Mp3ProbeInfo info = Mp3Codec.decode(bytes, input);
@@ -108,7 +135,7 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
                 return new ProbeResult(input, "audio/mpeg", "mp3", MediaType.AUDIO, null, List.of(), Map.of("sizeBytes", String.valueOf(size)));
             }
 
-            if ("ogg".equals(extension) || isLikelyOgg(bytes)) {
+            if (likelyOgg) {
                 OggProbeInfo info = OggCodec.decode(bytes, input);
                 return new ProbeResult(
                         input,
@@ -124,7 +151,7 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
                 );
             }
 
-            if ("wav".equals(extension) || WavParser.isLikelyWav(bytes)) {
+            if (likelyWav) {
                 try {
                     WavProbeInfo info = WavCodec.decode(bytes, input);
                     return new ProbeResult(
@@ -142,7 +169,49 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
                 return new ProbeResult(input, "audio/wav", "wav", MediaType.AUDIO, null, List.of(), Map.of("sizeBytes", String.valueOf(size)));
             }
 
-            if ("png".equals(extension) || PngParser.isLikelyPng(bytes)) {
+            if (likelyAiff) {
+                try {
+                    AiffProbeInfo info = AiffCodec.decode(bytes, input);
+                    String outputExt = "aif".equals(extension) ? "aif" : ("aifc".equals(extension) ? "aifc" : "aiff");
+                    return new ProbeResult(
+                            input,
+                            "audio/aiff",
+                            outputExt,
+                            MediaType.AUDIO,
+                            info.durationMillis(),
+                            List.of(new StreamInfo(0, StreamKind.AUDIO, "pcm", info.bitrateKbps(), info.sampleRate(), info.channels(), null, null, null)),
+                            Map.of("sizeBytes", String.valueOf(size), "bitrateMode", info.bitrateMode().name())
+                    );
+                } catch (CodecMediaException ignored) {
+                    // Fall back to extension-only probe for malformed/partial files.
+                }
+                String outputExt = "aif".equals(extension) ? "aif" : ("aifc".equals(extension) ? "aifc" : "aiff");
+                return new ProbeResult(input, "audio/aiff", outputExt, MediaType.AUDIO, null, List.of(), Map.of("sizeBytes", String.valueOf(size)));
+            }
+
+            if (likelyFlac) {
+                try {
+                    FlacProbeInfo info = FlacCodec.decode(bytes, input);
+                    return new ProbeResult(
+                            input,
+                            "audio/flac",
+                            "flac",
+                            MediaType.AUDIO,
+                            info.durationMillis(),
+                            List.of(new StreamInfo(0, StreamKind.AUDIO, info.codec(), info.bitrateKbps(), info.sampleRate(), info.channels(), null, null, null)),
+                            Map.of(
+                                    "sizeBytes", String.valueOf(size),
+                                    "bitrateMode", info.bitrateMode().name(),
+                                    "bitsPerSample", String.valueOf(info.bitsPerSample())
+                            )
+                    );
+                } catch (CodecMediaException ignored) {
+                    // Fall back to extension-only probe for malformed/partial files.
+                }
+                return new ProbeResult(input, "audio/flac", "flac", MediaType.AUDIO, null, List.of(), Map.of("sizeBytes", String.valueOf(size)));
+            }
+
+            if (likelyPng) {
                 try {
                     PngProbeInfo info = PngParser.parse(bytes);
                     return new ProbeResult(
@@ -164,7 +233,7 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
                 return new ProbeResult(input, "image/png", "png", MediaType.IMAGE, null, List.of(), Map.of("sizeBytes", String.valueOf(size)));
             }
 
-            if ("jpg".equals(extension) || "jpeg".equals(extension) || JpegParser.isLikelyJpeg(bytes)) {
+            if (likelyJpeg) {
                 String outputExt = "jpeg".equals(extension) ? "jpeg" : "jpg";
                 try {
                     JpegProbeInfo info = JpegParser.parse(bytes);
@@ -187,7 +256,7 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
                 return new ProbeResult(input, "image/jpeg", outputExt, MediaType.IMAGE, null, List.of(), Map.of("sizeBytes", String.valueOf(size)));
             }
 
-            if ("webp".equals(extension) || WebpParser.isLikelyWebp(bytes)) {
+            if (likelyWebp) {
                 try {
                     WebpProbeInfo info = WebpParser.parse(bytes);
                     java.util.LinkedHashMap<String, String> tags = new java.util.LinkedHashMap<>();
@@ -210,7 +279,7 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
                 return new ProbeResult(input, "image/webp", "webp", MediaType.IMAGE, null, List.of(), Map.of("sizeBytes", String.valueOf(size)));
             }
 
-            if ("bmp".equals(extension) || BmpParser.isLikelyBmp(bytes)) {
+            if (likelyBmp) {
                 try {
                     BmpProbeInfo info = BmpParser.parse(bytes);
                     return new ProbeResult(
@@ -231,7 +300,7 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
                 return new ProbeResult(input, "image/bmp", "bmp", MediaType.IMAGE, null, List.of(), Map.of("sizeBytes", String.valueOf(size)));
             }
 
-            if ("tif".equals(extension) || "tiff".equals(extension) || TiffParser.isLikelyTiff(bytes)) {
+            if (likelyTiff) {
                 String outputExt = "tiff".equals(extension) ? "tiff" : "tif";
                 try {
                     TiffProbeInfo info = TiffParser.parse(bytes);
@@ -255,7 +324,7 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
                 return new ProbeResult(input, "image/tiff", outputExt, MediaType.IMAGE, null, List.of(), Map.of("sizeBytes", String.valueOf(size)));
             }
 
-            if ("heic".equals(extension) || "heif".equals(extension) || "avif".equals(extension) || HeifParser.isLikelyHeif(bytes)) {
+            if (likelyHeif) {
                 String outputExt = "heif".equals(extension) ? "heif" : "heic";
                 if ("avif".equals(extension)) {
                     outputExt = "avif";
@@ -293,7 +362,7 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
                 return new ProbeResult(input, mimeType, outputExt, MediaType.IMAGE, null, List.of(), Map.of("sizeBytes", String.valueOf(size)));
             }
 
-            if ("mov".equals(extension) || MovParser.isLikelyMov(bytes)) {
+            if (likelyMov) {
                 try {
                     MovProbeInfo info = MovCodec.decode(bytes, input);
                     java.util.LinkedHashMap<String, String> tags = new java.util.LinkedHashMap<>();
@@ -341,7 +410,7 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
                 return new ProbeResult(input, "video/quicktime", "mov", MediaType.VIDEO, null, List.of(), Map.of("sizeBytes", String.valueOf(size)));
             }
 
-            if ("mp4".equals(extension) || "m4a".equals(extension) || Mp4Parser.isLikelyMp4(bytes)) {
+            if (likelyMp4) {
                 String outputExt = "m4a".equals(extension) ? "m4a" : "mp4";
                 String mimeType = "m4a".equals(outputExt) ? "audio/mp4" : "video/mp4";
                 MediaType mediaType = "m4a".equals(outputExt) ? MediaType.AUDIO : MediaType.VIDEO;
@@ -375,7 +444,7 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
                 return new ProbeResult(input, mimeType, outputExt, mediaType, null, List.of(), Map.of("sizeBytes", String.valueOf(size)));
             }
 
-            if ("webm".equals(extension) || WebmParser.isLikelyWebm(bytes)) {
+            if (likelyWebm) {
                 try {
                     WebmProbeInfo info = WebmCodec.decode(bytes, input);
                     java.util.LinkedHashMap<String, String> tags = new java.util.LinkedHashMap<>();
@@ -420,30 +489,8 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
                 return new ProbeResult(input, "video/webm", "webm", MediaType.VIDEO, null, List.of(), Map.of("sizeBytes", String.valueOf(size)));
             }
 
-            String mimeType = switch (extension) {
-                case "mp4" -> "video/mp4";
-                case "mov" -> "video/quicktime";
-                case "webm" -> "video/webm";
-                case "m4a" -> "audio/mp4";
-                case "mp3" -> "audio/mpeg";
-                case "ogg" -> "audio/ogg";
-                case "wav" -> "audio/wav";
-                case "png" -> "image/png";
-                case "jpg", "jpeg" -> "image/jpeg";
-                case "webp" -> "image/webp";
-                case "bmp" -> "image/bmp";
-                case "tif", "tiff" -> "image/tiff";
-                case "heic" -> "image/heic";
-                case "heif" -> "image/heif";
-                case "avif" -> "image/avif";
-                default -> "application/octet-stream";
-            };
-            MediaType mediaType = switch (extension) {
-                case "mp4", "mov", "webm" -> MediaType.VIDEO;
-                case "m4a", "mp3", "ogg", "wav" -> MediaType.AUDIO;
-                case "png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff", "heic", "heif", "avif" -> MediaType.IMAGE;
-                default -> MediaType.UNKNOWN;
-            };
+            String mimeType = mimeTypeByExtension(extension);
+            MediaType mediaType = mediaTypeByExtension(extension);
 
             return new ProbeResult(input, mimeType, extension, mediaType, null, List.of(), Map.of("sizeBytes", String.valueOf(size)));
         } catch (IOException e) {
@@ -648,6 +695,18 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
                     } catch (CodecMediaException e) {
                         return new ValidationResult(false, List.of(), List.of("Strict validation failed for wav: " + e.getMessage()));
                     }
+                } else if ("aif".equals(extension) || "aiff".equals(extension) || "aifc".equals(extension)) {
+                    try {
+                        AiffParser.parse(bytes);
+                    } catch (CodecMediaException e) {
+                        return new ValidationResult(false, List.of(), List.of("Strict validation failed for aiff: " + e.getMessage()));
+                    }
+                } else if ("flac".equals(extension)) {
+                    try {
+                        FlacParser.parse(bytes);
+                    } catch (CodecMediaException e) {
+                        return new ValidationResult(false, List.of(), List.of("Strict validation failed for flac: " + e.getMessage()));
+                    }
                 } else if ("png".equals(extension)) {
                     try {
                         PngParser.parse(bytes);
@@ -747,6 +806,39 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
         return (bytes[0] & (byte) 0xFF) == (byte) 0xFF && (bytes[1] & (byte) 0xE0) == (byte) 0xE0;
     }
 
+    private static byte[] readProbePrefix(Path input) throws IOException {
+        int expected = (int) Math.min(PROBE_PREFIX_BYTES, Math.max(0L, Files.size(input)));
+        if (expected == 0) {
+            return new byte[0];
+        }
+        try (InputStream in = Files.newInputStream(input)) {
+            return in.readNBytes(expected);
+        }
+    }
+
+    private static String mimeTypeByExtension(String extension) {
+        return switch (extension) {
+            case "mp4" -> "video/mp4";
+            case "mov" -> "video/quicktime";
+            case "webm" -> "video/webm";
+            case "m4a" -> "audio/mp4";
+            case "mp3" -> "audio/mpeg";
+            case "ogg" -> "audio/ogg";
+            case "wav" -> "audio/wav";
+            case "aif", "aiff", "aifc" -> "audio/aiff";
+            case "flac" -> "audio/flac";
+            case "png" -> "image/png";
+            case "jpg", "jpeg" -> "image/jpeg";
+            case "webp" -> "image/webp";
+            case "bmp" -> "image/bmp";
+            case "tif", "tiff" -> "image/tiff";
+            case "heic" -> "image/heic";
+            case "heif" -> "image/heif";
+            case "avif" -> "image/avif";
+            default -> "application/octet-stream";
+        };
+    }
+
     private static Path metadataSidecarPath(Path input) {
         return input.resolveSibling(input.getFileName() + ".codecmedia.properties");
     }
@@ -763,7 +855,7 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
 
     private static MediaType mediaTypeByExtension(String extension) {
         return switch (normalizeExtension(extension)) {
-            case "mp3", "ogg", "wav", "pcm", "m4a", "aac", "flac" -> MediaType.AUDIO;
+            case "mp3", "ogg", "wav", "aif", "aiff", "aifc", "pcm", "m4a", "aac", "flac" -> MediaType.AUDIO;
             case "mp4", "mkv", "mov", "avi", "webm" -> MediaType.VIDEO;
             case "png", "jpg", "jpeg", "gif", "bmp", "webp", "tif", "tiff", "heic", "heif", "avif" -> MediaType.IMAGE;
             default -> MediaType.UNKNOWN;

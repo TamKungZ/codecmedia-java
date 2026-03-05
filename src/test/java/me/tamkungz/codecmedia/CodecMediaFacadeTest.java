@@ -406,6 +406,69 @@ class CodecMediaFacadeTest {
     }
 
     @Test
+    void probe_shouldDetectM4aAsAudioMp4() throws Exception {
+        CodecMediaEngine engine = CodecMedia.createDefault();
+        Path tempM4a = createTempM4aFixture();
+
+        try {
+            var result = engine.probe(tempM4a);
+            assertEquals("audio/mp4", result.mimeType());
+            assertEquals("m4a", result.extension());
+            assertEquals(me.tamkungz.codecmedia.model.MediaType.AUDIO, result.mediaType());
+            assertTrue(result.tags().containsKey("sizeBytes"));
+        } finally {
+            Files.deleteIfExists(tempM4a);
+        }
+    }
+
+    @Test
+    void validate_strictShouldAcceptValidM4aFixture() throws Exception {
+        CodecMediaEngine engine = CodecMedia.createDefault();
+        Path tempM4a = createTempM4aFixture();
+
+        try {
+            var result = engine.validate(tempM4a, new me.tamkungz.codecmedia.options.ValidationOptions(true, 0));
+            assertTrue(result.valid());
+            assertTrue(result.errors().isEmpty());
+        } finally {
+            Files.deleteIfExists(tempM4a);
+        }
+    }
+
+    @Test
+    void probe_shouldDetectFlacBySignature() throws Exception {
+        CodecMediaEngine engine = CodecMedia.createDefault();
+        Path tempFlac = createTempFlacFixture();
+
+        try {
+            var result = engine.probe(tempFlac);
+            assertEquals("audio/flac", result.mimeType());
+            assertEquals("flac", result.extension());
+            assertEquals(me.tamkungz.codecmedia.model.MediaType.AUDIO, result.mediaType());
+            assertTrue(result.tags().containsKey("sizeBytes"));
+            assertTrue(result.tags().containsKey("bitsPerSample"));
+            assertFalse(result.streams().isEmpty());
+            assertEquals("flac", result.streams().get(0).codec());
+        } finally {
+            Files.deleteIfExists(tempFlac);
+        }
+    }
+
+    @Test
+    void validate_strictShouldAcceptValidFlacFixture() throws Exception {
+        CodecMediaEngine engine = CodecMedia.createDefault();
+        Path tempFlac = createTempFlacFixture();
+
+        try {
+            var result = engine.validate(tempFlac, new me.tamkungz.codecmedia.options.ValidationOptions(true, 0));
+            assertTrue(result.valid());
+            assertTrue(result.errors().isEmpty());
+        } finally {
+            Files.deleteIfExists(tempFlac);
+        }
+    }
+
+    @Test
     void probe_shouldDetectMovByContainerHeader() throws Exception {
         CodecMediaEngine engine = CodecMedia.createDefault();
         Path tempMov = createTempMovFixture();
@@ -552,6 +615,18 @@ class CodecMediaFacadeTest {
         return temp;
     }
 
+    private static Path createTempM4aFixture() throws IOException {
+        Path temp = Files.createTempFile("codecmedia-m4a-", ".m4a");
+        Files.write(temp, minimalM4aBytes());
+        return temp;
+    }
+
+    private static Path createTempFlacFixture() throws IOException {
+        Path temp = Files.createTempFile("codecmedia-flac-", ".flac");
+        Files.write(temp, minimalFlacBytes());
+        return temp;
+    }
+
     private static Path createTempWebmFixture() throws IOException {
         Path temp = Files.createTempFile("codecmedia-webm-", ".webm");
         Files.write(temp, minimalWebmBytes());
@@ -567,6 +642,42 @@ class CodecMediaFacadeTest {
                 0x00, 0x00, 0x00, 0x00,
                 'q', 't', ' ', ' '
         };
+    }
+
+    private static byte[] minimalM4aBytes() {
+        return new byte[] {
+                0x00, 0x00, 0x00, 0x14,
+                'f', 't', 'y', 'p',
+                'M', '4', 'A', ' ',
+                0x00, 0x00, 0x00, 0x00,
+                'i', 's', 'o', 'm'
+        };
+    }
+
+    private static byte[] minimalFlacBytes() {
+        byte[] bytes = new byte[4 + 4 + 34];
+        bytes[0] = 'f'; bytes[1] = 'L'; bytes[2] = 'a'; bytes[3] = 'C';
+        bytes[4] = (byte) 0x80;
+        bytes[5] = 0x00;
+        bytes[6] = 0x00;
+        bytes[7] = 34;
+
+        int sampleRate = 44100;
+        int channels = 2;
+        int bitsPerSample = 16;
+        long totalSamples = 44100L;
+
+        long packed = ((long) sampleRate & 0xFFFFFL) << 44;
+        packed |= ((long) (channels - 1) & 0x7L) << 41;
+        packed |= ((long) (bitsPerSample - 1) & 0x1FL) << 36;
+        packed |= (totalSamples & 0xFFFFFFFFFL);
+
+        int streamInfoOffset = 8;
+        for (int i = 0; i < 8; i++) {
+            bytes[streamInfoOffset + 10 + i] = (byte) ((packed >>> (56 - (i * 8))) & 0xFF);
+        }
+
+        return bytes;
     }
 
     private static byte[] minimalWebmBytes() {

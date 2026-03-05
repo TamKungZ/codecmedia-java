@@ -20,6 +20,10 @@ public final class Mp4Parser {
                 || "avc1".equals(major)
                 || "mp41".equals(major)
                 || "mp42".equals(major)
+                || "M4A ".equals(major)
+                || "M4B ".equals(major)
+                || "M4P ".equals(major)
+                || "M4V ".equals(major)
                 || "qt  ".equals(major);
     }
 
