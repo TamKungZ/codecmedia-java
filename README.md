@@ -1,6 +1,9 @@
 # CodecMedia
 
 [![MvnRepository](https://badges.mvnrepository.com/badge/me.tamkungz.codecmedia/codecmedia/badge.svg?label=MvnRepository)](https://mvnrepository.com/artifact/me.tamkungz.codecmedia/codecmedia)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Java](https://img.shields.io/badge/Java-17%2B-ED8B00?logo=openjdk&logoColor=white)](https://openjdk.org/)
+[![Maven](https://img.shields.io/badge/Maven-3.9%2B-C71A36?logo=apachemaven&logoColor=white)](https://maven.apache.org/)
 
 CodecMedia is a Java library for media probing, validation, metadata sidecar persistence, audio extraction, playback workflow simulation, and conversion routing.
 
