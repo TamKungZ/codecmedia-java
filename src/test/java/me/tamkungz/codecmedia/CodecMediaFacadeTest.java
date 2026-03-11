@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import javax.imageio.ImageIO;
 
@@ -13,13 +14,51 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 class CodecMediaFacadeTest {
+
+    private record ExampleFixtureExpectation(
+            String fileName,
+            String mimeType,
+            String extension,
+            me.tamkungz.codecmedia.model.MediaType mediaType
+    ) {
+    }
 
     @Test
     void createDefault_shouldReturnEngine() {
         CodecMediaEngine engine = CodecMedia.createDefault();
         assertNotNull(engine);
+    }
+
+    @ParameterizedTest(name = "probe real fixture: {0}")
+    @MethodSource("exampleFixtures")
+    void probe_shouldDetectRealExampleFixtures(ExampleFixtureExpectation fixture) throws Exception {
+        CodecMediaEngine engine = CodecMedia.createDefault();
+        Path input = Path.of("src/test/resources/example", fixture.fileName());
+
+        assertTrue(Files.exists(input));
+
+        var result = engine.probe(input);
+        assertEquals(fixture.mimeType(), result.mimeType());
+        assertEquals(fixture.extension(), result.extension());
+        assertEquals(fixture.mediaType(), result.mediaType());
+        assertTrue(result.tags().containsKey("sizeBytes"));
+    }
+
+    @ParameterizedTest(name = "validate real fixture: {0}")
+    @MethodSource("exampleFixtures")
+    void validate_strictShouldAcceptRealExampleFixtures(ExampleFixtureExpectation fixture) throws Exception {
+        CodecMediaEngine engine = CodecMedia.createDefault();
+        Path input = Path.of("src/test/resources/example", fixture.fileName());
+
+        assertTrue(Files.exists(input));
+
+        var result = engine.validate(input, new me.tamkungz.codecmedia.options.ValidationOptions(true, 0));
+        assertTrue(result.valid());
+        assertTrue(result.errors().isEmpty());
     }
 
     @Test
@@ -704,5 +743,18 @@ class CodecMediaFacadeTest {
                 }
             });
         }
+    }
+
+    private static Stream<ExampleFixtureExpectation> exampleFixtures() {
+        return Stream.of(
+                new ExampleFixtureExpectation("file_example_MP3_1MG.mp3", "audio/mpeg", "mp3", me.tamkungz.codecmedia.model.MediaType.AUDIO),
+                new ExampleFixtureExpectation("file_example_MP3_700KB.mp3", "audio/mpeg", "mp3", me.tamkungz.codecmedia.model.MediaType.AUDIO),
+                new ExampleFixtureExpectation("file_example_MP4_480_1_5MG.mp4", "video/mp4", "mp4", me.tamkungz.codecmedia.model.MediaType.VIDEO),
+                new ExampleFixtureExpectation("file_example_MP4_640_3MG.mp4", "video/mp4", "mp4", me.tamkungz.codecmedia.model.MediaType.VIDEO),
+                new ExampleFixtureExpectation("file_example_PNG_1MB.png", "image/png", "png", me.tamkungz.codecmedia.model.MediaType.IMAGE),
+                new ExampleFixtureExpectation("file_example_PNG_500kB.png", "image/png", "png", me.tamkungz.codecmedia.model.MediaType.IMAGE),
+                new ExampleFixtureExpectation("file_example_WEBM_480_900KB.webm", "video/webm", "webm", me.tamkungz.codecmedia.model.MediaType.VIDEO),
+                new ExampleFixtureExpectation("file_example_WEBM_640_1_4MB.webm", "video/webm", "webm", me.tamkungz.codecmedia.model.MediaType.VIDEO)
+        );
     }
 }
