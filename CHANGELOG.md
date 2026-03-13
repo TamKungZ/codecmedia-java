@@ -5,12 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-03-13
+
+### Changed
+- Migrated repository ownership and project references to `CodecMediaLib/codecmedia-java`.
+- Updated SCM/issue/CI metadata in [`pom.xml`](pom.xml).
+- Updated organization metadata in [`pom.xml`](pom.xml) to `CodecMediaLib`.
+
+### Notes
+- This `1.1.0` release is a transition baseline and prepares for larger updates planned in the `1.1.*` series.
+
 ## [1.0.4] - 2026-03-05
 
 ### Added
 - Added richer MOV probe fields in [`MovProbeInfo`](src/main/java/me/tamkungz/codecmedia/internal/video/mov/MovProbeInfo.java): `videoBitrateKbps`, `audioBitrateKbps`, `bitDepth`, and `displayAspectRatio`.
 - Added richer MP4 probe fields in [`Mp4ProbeInfo`](src/main/java/me/tamkungz/codecmedia/internal/video/mp4/Mp4ProbeInfo.java): codec/audio stream details, frame rate, bitrate fields, bit depth, and display aspect ratio.
 - Added richer WebM probe fields in [`WebmProbeInfo`](src/main/java/me/tamkungz/codecmedia/internal/video/webm/WebmProbeInfo.java): per-track bitrate fields and display aspect ratio.
+- Added real fixture coverage in [`CodecMediaFacadeTest`](src/test/java/me/tamkungz/codecmedia/CodecMediaFacadeTest.java) for probe/strict-validate using files under [`src/test/resources/example`](src/test/resources/example).
+- Added round-trip conversion test class [`CodecMediaRoundTripConversionTest`](src/test/java/me/tamkungz/codecmedia/CodecMediaRoundTripConversionTest.java) to validate same-extension convert->convert flows across all real example extensions (`mp3`, `mp4`, `png`, `webm`).
 
 ### Changed
 - Enhanced MOV parsing in [`MovParser`](src/main/java/me/tamkungz/codecmedia/internal/video/mov/MovParser.java) with deeper BMFF track metadata extraction (`hdlr`, `mdhd`, `stsd`, `btrt`, `stsz`) and fallback bitrate estimation.
@@ -20,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Verified
 - Confirmed test stability after video parser improvements with `mvn test`.
+- Confirmed real-fixture conversion regression path with `mvn -Dtest=CodecMediaRoundTripConversionTest test`.
 
 ## [1.0.3] - 2026-03-05
 

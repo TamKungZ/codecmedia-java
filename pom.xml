@@ -7,7 +7,7 @@
 
   <groupId>me.tamkungz.codecmedia</groupId>
   <artifactId>codecmedia</artifactId>
-  <version>1.0.4</version>
+  <version>1.1.0</version>
   <packaging>jar</packaging>
 
   <name>CodecMedia</name>
@@ -19,20 +19,20 @@
   <url>https://codecmedia.tamkungz.me/</url>
 
   <organization>
-    <name>TamKungZ_</name>
-    <url>https://www.tamkungz.me/</url>
+    <name>CodecMediaLib</name>
+    <url>https://github.com/CodecMediaLib</url>
   </organization>
 
   <inceptionYear>2026</inceptionYear>
 
   <issueManagement>
     <system>GitHub Issues</system>
-    <url>https://github.com/TamKungZ/codecmedia-java/issues</url>
+    <url>https://github.com/CodecMediaLib/codecmedia-java/issues</url>
   </issueManagement>
 
   <ciManagement>
     <system>GitHub Actions</system>
-    <url>https://github.com/TamKungZ/codecmedia-java/actions</url>
+    <url>https://github.com/CodecMediaLib/codecmedia-java/actions</url>
   </ciManagement>
 
   <licenses>
@@ -58,9 +58,9 @@
   </developers>
 
   <scm>
-    <connection>scm:git:git://github.com/TamKungZ/codecmedia-java.git</connection>
-    <developerConnection>scm:git:ssh://github.com:TamKungZ/codecmedia-java.git</developerConnection>
-    <url>https://github.com/TamKungZ/codecmedia-java</url>
+    <connection>scm:git:git://github.com/CodecMediaLib/codecmedia-java.git</connection>
+    <developerConnection>scm:git:ssh://github.com:CodecMediaLib/codecmedia-java.git</developerConnection>
+    <url>https://github.com/CodecMediaLib/codecmedia-java</url>
   </scm>
 
   <distributionManagement>
