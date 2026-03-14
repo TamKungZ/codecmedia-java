@@ -1,8 +1,10 @@
 package me.tamkungz.codecmedia.internal.audio.aiff;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import org.junit.jupiter.api.Test;
 
+import me.tamkungz.codecmedia.CodecMediaException;
 import me.tamkungz.codecmedia.internal.audio.BitrateMode;
 
 class AiffParserTest {
@@ -20,6 +22,25 @@ class AiffParserTest {
         assertEquals(BitrateMode.CBR, info.bitrateMode());
     }
 
+    @Test
+    void shouldParseAifcWithPcmCompressionTypeNone() throws Exception {
+        byte[] aifc = createMinimalAifc(2, 44100, 16, 44100, "NONE");
+
+        AiffProbeInfo info = AiffParser.parse(aifc);
+
+        assertEquals(2, info.channels());
+        assertEquals(44100, info.sampleRate());
+        assertEquals(1411, info.bitrateKbps());
+    }
+
+    @Test
+    void shouldRejectUnsupportedAifcCompressionType() {
+        byte[] aifc = createMinimalAifc(2, 44100, 16, 44100, "ulaw");
+
+        CodecMediaException ex = assertThrows(CodecMediaException.class, () -> AiffParser.parse(aifc));
+        assertEquals("Unsupported AIFC compression type: ulaw", ex.getMessage());
+    }
+
     private static byte[] createMinimalAiff(int channels, int sampleRate, int bitsPerSample, int frames) {
         int commChunkSize = 18;
         int formSize = 4 + 8 + commChunkSize;
@@ -35,6 +56,29 @@ class AiffParserTest {
         writeBeInt(bytes, 22, frames);
         writeBeShort(bytes, 26, bitsPerSample);
         writeExtended80Integer(bytes, 28, sampleRate);
+
+        return bytes;
+    }
+
+    private static byte[] createMinimalAifc(int channels, int sampleRate, int bitsPerSample, int frames, String compressionType) {
+        int commChunkSize = 22;
+        int formSize = 4 + 8 + commChunkSize;
+        byte[] bytes = new byte[8 + formSize];
+
+        bytes[0] = 'F'; bytes[1] = 'O'; bytes[2] = 'R'; bytes[3] = 'M';
+        writeBeInt(bytes, 4, formSize);
+        bytes[8] = 'A'; bytes[9] = 'I'; bytes[10] = 'F'; bytes[11] = 'C';
+
+        bytes[12] = 'C'; bytes[13] = 'O'; bytes[14] = 'M'; bytes[15] = 'M';
+        writeBeInt(bytes, 16, commChunkSize);
+        writeBeShort(bytes, 20, channels);
+        writeBeInt(bytes, 22, frames);
+        writeBeShort(bytes, 26, bitsPerSample);
+        writeExtended80Integer(bytes, 28, sampleRate);
+        bytes[38] = (byte) compressionType.charAt(0);
+        bytes[39] = (byte) compressionType.charAt(1);
+        bytes[40] = (byte) compressionType.charAt(2);
+        bytes[41] = (byte) compressionType.charAt(3);
 
         return bytes;
     }

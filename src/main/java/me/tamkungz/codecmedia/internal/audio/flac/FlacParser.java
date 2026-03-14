@@ -19,17 +19,21 @@ public final class FlacParser {
         int channels = 0;
         int bitsPerSample = 0;
         long totalSamples = 0;
+        int audioStartOffset = -1;
 
         while (offset + 4 <= bytes.length) {
             int header = bytes[offset] & 0xFF;
             boolean last = (header & 0x80) != 0;
             int blockType = header & 0x7F;
+            if (blockType == 0x7F) {
+                throw new CodecMediaException("Invalid FLAC metadata block type: 127 is reserved");
+            }
             int length = ((bytes[offset + 1] & 0xFF) << 16)
                     | ((bytes[offset + 2] & 0xFF) << 8)
                     | (bytes[offset + 3] & 0xFF);
             offset += 4;
 
-            if (length < 0 || offset + length > bytes.length) {
+            if (offset + length > bytes.length) {
                 throw new CodecMediaException("Invalid FLAC metadata block length");
             }
 
@@ -47,6 +51,7 @@ public final class FlacParser {
 
             offset += length;
             if (last) {
+                audioStartOffset = offset;
                 break;
             }
         }
@@ -56,8 +61,11 @@ public final class FlacParser {
         }
 
         long durationMillis = totalSamples > 0 ? (totalSamples * 1000L) / sampleRate : 0;
+        long encodedAudioBytes = (audioStartOffset >= 0 && audioStartOffset <= bytes.length)
+                ? (bytes.length - (long) audioStartOffset)
+                : 0;
         int avgBitrateKbps = durationMillis > 0
-                ? (int) ((((long) bytes.length * 8L) * 1000L) / durationMillis / 1000L)
+                ? (int) ((encodedAudioBytes * 8L * 1000L) / durationMillis / 1000L)
                 : 0;
         int pcmEquivalentKbps = (int) (((long) sampleRate * channels * bitsPerSample) / 1000L);
         int bitrateKbps = avgBitrateKbps > 0 ? avgBitrateKbps : pcmEquivalentKbps;

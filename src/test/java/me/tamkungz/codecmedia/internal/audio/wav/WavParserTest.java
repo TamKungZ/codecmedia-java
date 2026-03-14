@@ -1,8 +1,11 @@
 package me.tamkungz.codecmedia.internal.audio.wav;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
+import me.tamkungz.codecmedia.CodecMediaException;
 import me.tamkungz.codecmedia.internal.audio.BitrateMode;
 
 class WavParserTest {
@@ -33,6 +36,28 @@ class WavParserTest {
         assertEquals(BitrateMode.CBR, info.bitrateMode());
     }
 
+    @Test
+    void shouldRejectUnsupportedCompressedWavFormat() {
+        byte[] wav = createPcmWav(2, 44100, 16, 44100 * 2 * 2);
+        writeLeShort(wav, 20, 0x0002); // ADPCM
+
+        CodecMediaException ex = assertThrows(CodecMediaException.class, () -> WavParser.parse(wav));
+        assertTrue(ex.getMessage().contains("Unsupported WAV audio format"));
+    }
+
+    @Test
+    void shouldParseRf64DataSizeFromDs64() throws Exception {
+        byte[] wav = createRf64WithDs64Data(2, 48000, 16, 48000L * 2 * 2);
+
+        WavProbeInfo info = WavParser.parse(wav);
+
+        assertEquals(2, info.channels());
+        assertEquals(48000, info.sampleRate());
+        assertEquals(1536, info.bitrateKbps());
+        assertEquals(1000, info.durationMillis());
+        assertEquals(BitrateMode.CBR, info.bitrateMode());
+    }
+
     private static byte[] createPcmWav(int channels, int sampleRate, int bitsPerSample, int dataSize) {
         int chunkSize = 36 + dataSize;
         byte[] out = new byte[44 + dataSize];
@@ -57,6 +82,43 @@ class WavParserTest {
         return out;
     }
 
+    private static byte[] createRf64WithDs64Data(int channels, int sampleRate, int bitsPerSample, long ds64DataSize) {
+        int fmtSize = 16;
+        int ds64Size = 28;
+        int dataPayload = (int) ds64DataSize;
+        int total = 12 + 8 + ds64Size + 8 + fmtSize + 8 + dataPayload;
+        byte[] out = new byte[total];
+
+        out[0] = 'R'; out[1] = 'F'; out[2] = '6'; out[3] = '4';
+        writeLeInt(out, 4, -1); // RF64 sentinel
+        out[8] = 'W'; out[9] = 'A'; out[10] = 'V'; out[11] = 'E';
+
+        int o = 12;
+        out[o] = 'd'; out[o + 1] = 's'; out[o + 2] = '6'; out[o + 3] = '4';
+        writeLeInt(out, o + 4, ds64Size);
+        writeLeLong(out, o + 8, (long) total - 8); // riffSize64
+        writeLeLong(out, o + 16, ds64DataSize); // dataSize64
+        writeLeLong(out, o + 24, 0); // sampleCount
+        writeLeInt(out, o + 32, 0); // table length
+        o += 8 + ds64Size;
+
+        out[o] = 'f'; out[o + 1] = 'm'; out[o + 2] = 't'; out[o + 3] = ' ';
+        writeLeInt(out, o + 4, fmtSize);
+        writeLeShort(out, o + 8, 1);
+        writeLeShort(out, o + 10, channels);
+        writeLeInt(out, o + 12, sampleRate);
+        int byteRate = sampleRate * channels * bitsPerSample / 8;
+        writeLeInt(out, o + 16, byteRate);
+        int blockAlign = channels * bitsPerSample / 8;
+        writeLeShort(out, o + 20, blockAlign);
+        writeLeShort(out, o + 22, bitsPerSample);
+        o += 8 + fmtSize;
+
+        out[o] = 'd'; out[o + 1] = 'a'; out[o + 2] = 't'; out[o + 3] = 'a';
+        writeLeInt(out, o + 4, -1); // RF64 sentinel size
+        return out;
+    }
+
     private static void writeLeShort(byte[] out, int offset, int value) {
         out[offset] = (byte) (value & 0xFF);
         out[offset + 1] = (byte) ((value >>> 8) & 0xFF);
@@ -67,5 +129,16 @@ class WavParserTest {
         out[offset + 1] = (byte) ((value >>> 8) & 0xFF);
         out[offset + 2] = (byte) ((value >>> 16) & 0xFF);
         out[offset + 3] = (byte) ((value >>> 24) & 0xFF);
+    }
+
+    private static void writeLeLong(byte[] out, int offset, long value) {
+        out[offset] = (byte) (value & 0xFF);
+        out[offset + 1] = (byte) ((value >>> 8) & 0xFF);
+        out[offset + 2] = (byte) ((value >>> 16) & 0xFF);
+        out[offset + 3] = (byte) ((value >>> 24) & 0xFF);
+        out[offset + 4] = (byte) ((value >>> 32) & 0xFF);
+        out[offset + 5] = (byte) ((value >>> 40) & 0xFF);
+        out[offset + 6] = (byte) ((value >>> 48) & 0xFF);
+        out[offset + 7] = (byte) ((value >>> 56) & 0xFF);
     }
 }

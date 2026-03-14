@@ -26,6 +26,9 @@ public final class AiffCodec {
         return info;
     }
 
+    // Intentional: AIFF codec is currently decode/probe only in this library.
+    // No encode API is exposed until a deterministic AIFF encoder path is introduced.
+
     private static void validateDecodedProbe(AiffProbeInfo info, Path input) throws CodecMediaException {
         if (info.sampleRate() <= 0 || info.channels() <= 0 || info.bitrateKbps() <= 0) {
             throw new CodecMediaException("Decoded AIFF has invalid stream values: " + input);

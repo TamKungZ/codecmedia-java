@@ -5,6 +5,9 @@ import me.tamkungz.codecmedia.internal.audio.BitrateMode;
 
 public final class AiffParser {
 
+    private static final String AIFC_COMPRESSION_NONE = "NONE";
+    private static final String AIFC_COMPRESSION_SOWT = "sowt";
+
     private AiffParser() {
     }
 
@@ -13,6 +16,7 @@ public final class AiffParser {
             throw new CodecMediaException("Not an AIFF file");
         }
 
+        boolean aifc = bytes[11] == 'C';
         int offset = 12;
         Integer channels = null;
         Integer bitsPerSample = null;
@@ -39,6 +43,14 @@ public final class AiffParser {
                 frameCount = readBeUInt32(bytes, chunkDataStart + 2);
                 bitsPerSample = readBeShort(bytes, chunkDataStart + 6);
                 sampleRate = decodeExtended80ToIntHz(bytes, chunkDataStart + 8);
+
+                if (aifc) {
+                    if (chunkSize < 22) {
+                        throw new CodecMediaException("AIFC COMM chunk missing compression type");
+                    }
+                    String compressionType = readAscii(bytes, chunkDataStart + 18, 4);
+                    validateAifcCompressionType(compressionType);
+                }
             }
 
             int padded = (chunkSize % 2 == 0) ? chunkSize : chunkSize + 1;
@@ -57,6 +69,13 @@ public final class AiffParser {
         int bitrateKbps = (int) ((byteRate * 8L) / 1000L);
 
         return new AiffProbeInfo(durationMillis, bitrateKbps, sampleRate, channels, BitrateMode.CBR);
+    }
+
+    private static void validateAifcCompressionType(String compressionType) throws CodecMediaException {
+        if (AIFC_COMPRESSION_NONE.equals(compressionType) || AIFC_COMPRESSION_SOWT.equals(compressionType)) {
+            return;
+        }
+        throw new CodecMediaException("Unsupported AIFC compression type: " + compressionType);
     }
 
     public static boolean isLikelyAiff(byte[] bytes) {

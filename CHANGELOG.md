@@ -14,14 +14,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Strengthened OGG logical-stream parsing in [`OggParser`](src/main/java/me/tamkungz/codecmedia/internal/audio/ogg/OggParser.java) with per-stream page-sequence validation and serial-scoped metrics for multiplexed files.
 - Refined Vorbis bitrate-mode classification in [`OggParser.detectVorbisBitrateMode()`](src/main/java/me/tamkungz/codecmedia/internal/audio/ogg/OggParser.java) to infer from observed bitrate variation instead of coarse nominal/page-count heuristics.
 - Replaced broad OGG payload string scanning with structured Vorbis/Opus comment-header parsing in [`OggParser`](src/main/java/me/tamkungz/codecmedia/internal/audio/ogg/OggParser.java), and fixed sequence tracking to use `long` to avoid overflow.
+- Updated [`WavParser`](src/main/java/me/tamkungz/codecmedia/internal/audio/wav/WavParser.java) to read/validate `audioFormat` from `fmt ` and reject unsupported compressed WAV formats instead of silently computing incorrect duration.
+- Added RF64-aware WAV parsing in [`WavParser`](src/main/java/me/tamkungz/codecmedia/internal/audio/wav/WavParser.java), including unsigned chunk-size handling and `data` size sentinel (`0xFFFFFFFF`) resolution via `ds64`.
+- Updated [`FlacParser`](src/main/java/me/tamkungz/codecmedia/internal/audio/flac/FlacParser.java) to reject reserved metadata block type `127` per FLAC spec.
+- Updated [`FlacParser`](src/main/java/me/tamkungz/codecmedia/internal/audio/flac/FlacParser.java) bitrate estimation to use encoded audio payload region after metadata blocks (instead of whole file bytes), reducing artwork/metadata inflation.
+- Updated [`AiffParser`](src/main/java/me/tamkungz/codecmedia/internal/audio/aiff/AiffParser.java) to validate AIFC `COMM` compression type and reject unsupported compressed variants.
 
 ### Added
 - Added MP3 parser regression tests for Xing-priority duration, trailing ID3v1 handling, and unsupported Layer I/II diagnostics in [`Mp3ParserTest`](src/test/java/me/tamkungz/codecmedia/internal/audio/mp3/Mp3ParserTest.java).
 - Added OGG parser tests for Vorbis CBR/VBR mode inference, broken page-sequence detection, and multiplexed-stream metric isolation in [`OggParserTest`](src/test/java/me/tamkungz/codecmedia/internal/audio/ogg/OggParserTest.java).
+- Added WAV parser tests for unsupported compressed format rejection and RF64 `ds64`/`data` sentinel handling in [`WavParserTest`](src/test/java/me/tamkungz/codecmedia/internal/audio/wav/WavParserTest.java).
+- Added FLAC parser tests for reserved block type rejection and metadata-heavy bitrate estimation behavior in [`FlacParserTest`](src/test/java/me/tamkungz/codecmedia/internal/audio/flac/FlacParserTest.java).
+- Added explicit decode-only intent comment in [`FlacCodec`](src/main/java/me/tamkungz/codecmedia/internal/audio/flac/FlacCodec.java).
+- Added AIFF parser tests for supported AIFC `NONE` and unsupported compression-type rejection in [`AiffParserTest`](src/test/java/me/tamkungz/codecmedia/internal/audio/aiff/AiffParserTest.java).
+- Added explicit decode-only intent comment in [`AiffCodec`](src/main/java/me/tamkungz/codecmedia/internal/audio/aiff/AiffCodec.java).
 
 ### Verified
 - Confirmed MP3 parser updates with `mvn -Dtest=Mp3ParserTest test`.
 - Confirmed OGG parser updates with `mvn -Dtest=OggParserTest test`.
+- Confirmed WAV parser updates with `mvn -Dtest=WavParserTest test`.
+- Confirmed FLAC parser updates with `mvn -Dtest=FlacParserTest test`.
+- Confirmed AIFF parser updates with `mvn -Dtest=AiffParserTest test`.
 
 ## [1.1.0] - 2026-03-13
 

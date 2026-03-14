@@ -26,6 +26,9 @@ public final class FlacCodec {
         return info;
     }
 
+    // Intentional: FLAC codec is currently decode/probe only in this library.
+    // No encode API is exposed until a deterministic FLAC encoder path is introduced.
+
     private static void validateDecodedProbe(FlacProbeInfo info, Path input) throws CodecMediaException {
         if (info.sampleRate() <= 0 || info.channels() <= 0 || info.bitsPerSample() <= 0) {
             throw new CodecMediaException("Decoded FLAC has invalid stream values: " + input);
