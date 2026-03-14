@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-03-14
+
+### Fixed
+- Improved MP3 duration estimation in [`Mp3Parser.estimateDurationMillis()`](src/main/java/me/tamkungz/codecmedia/internal/audio/mp3/Mp3Parser.java) to prioritize Xing/VBRI frame-count metadata before scanned sample totals.
+- Excluded trailing ID3v1 tag bytes from MP3 audio scan range in [`Mp3Parser`](src/main/java/me/tamkungz/codecmedia/internal/audio/mp3/Mp3Parser.java), reducing bitrate drift when footer tags are present.
+- Added clearer non-Layer III error handling in [`Mp3Parser.parse()`](src/main/java/me/tamkungz/codecmedia/internal/audio/mp3/Mp3Parser.java) for MPEG Layer I/II inputs.
+- Strengthened OGG logical-stream parsing in [`OggParser`](src/main/java/me/tamkungz/codecmedia/internal/audio/ogg/OggParser.java) with per-stream page-sequence validation and serial-scoped metrics for multiplexed files.
+- Refined Vorbis bitrate-mode classification in [`OggParser.detectVorbisBitrateMode()`](src/main/java/me/tamkungz/codecmedia/internal/audio/ogg/OggParser.java) to infer from observed bitrate variation instead of coarse nominal/page-count heuristics.
+- Replaced broad OGG payload string scanning with structured Vorbis/Opus comment-header parsing in [`OggParser`](src/main/java/me/tamkungz/codecmedia/internal/audio/ogg/OggParser.java), and fixed sequence tracking to use `long` to avoid overflow.
+
+### Added
+- Added MP3 parser regression tests for Xing-priority duration, trailing ID3v1 handling, and unsupported Layer I/II diagnostics in [`Mp3ParserTest`](src/test/java/me/tamkungz/codecmedia/internal/audio/mp3/Mp3ParserTest.java).
+- Added OGG parser tests for Vorbis CBR/VBR mode inference, broken page-sequence detection, and multiplexed-stream metric isolation in [`OggParserTest`](src/test/java/me/tamkungz/codecmedia/internal/audio/ogg/OggParserTest.java).
+
+### Verified
+- Confirmed MP3 parser updates with `mvn -Dtest=Mp3ParserTest test`.
+- Confirmed OGG parser updates with `mvn -Dtest=OggParserTest test`.
+
 ## [1.1.0] - 2026-03-13
 
 ### Changed

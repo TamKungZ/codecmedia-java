@@ -1,5 +1,8 @@
 package me.tamkungz.codecmedia.internal.audio.ogg;
 
+import java.util.HashSet;
+import java.util.Set;
+
 import me.tamkungz.codecmedia.CodecMediaException;
 import me.tamkungz.codecmedia.internal.audio.BitrateMode;
 import me.tamkungz.codecmedia.internal.io.ByteArrayReader;
@@ -28,21 +31,54 @@ public final class OggParser {
         }
 
         AudioIdent ident = parseIdentificationPacket(data, identOffset, firstPayloadSize);
+        long targetSerial = firstPage.serialNumber();
 
         long payloadBits = 0;
-        int pageCount = 0;
         long maxGranule = 0;
+        long prevGranule = -1;
+        long prevSequence = -1;
+        Set<Integer> observedKbps = new HashSet<>();
+        boolean hasCommentMetadata = false;
         int offset = 0;
         while (offset + 27 <= data.length) {
             OggPageHeader page = parsePageHeader(data, offset);
             if (page == null) {
                 break;
             }
-            payloadBits += (long) page.payloadSize() * 8;
-            pageCount++;
-            if (page.granulePosition() > maxGranule) {
-                maxGranule = page.granulePosition();
+
+            if (page.serialNumber() == targetSerial) {
+                if (prevSequence >= 0 && page.sequenceNumber() != (long) prevSequence + 1L) {
+                    throw new CodecMediaException("Invalid OGG stream: broken page sequence for target stream");
+                }
+                prevSequence = page.sequenceNumber();
+
+                payloadBits += (long) page.payloadSize() * 8;
+                if (page.granulePosition() > maxGranule) {
+                    maxGranule = page.granulePosition();
+                }
+
+                int payloadOffset = offset + page.headerSize();
+                if (!hasCommentMetadata && payloadOffset + page.payloadSize() <= data.length
+                        && containsCodecCommentSignal(data, payloadOffset, page.payloadSize(), ident.codec())) {
+                    hasCommentMetadata = true;
+                }
+
+                if (prevGranule >= 0 && page.granulePosition() > prevGranule) {
+                    long granuleDelta = page.granulePosition() - prevGranule;
+                    int granuleRate = ident.granuleRate() > 0 ? ident.granuleRate() : ident.sampleRate();
+                    if (granuleRate > 0) {
+                        long millis = (granuleDelta * 1000L) / granuleRate;
+                        if (millis > 0) {
+                            int kbps = (int) (((long) page.payloadSize() * 8L * 1000L) / millis / 1000L);
+                            if (kbps > 0) {
+                                observedKbps.add(kbps);
+                            }
+                        }
+                    }
+                }
+                prevGranule = page.granulePosition();
             }
+
             offset += page.totalPageSize();
         }
 
@@ -59,12 +95,29 @@ public final class OggParser {
         int bitrateKbps = avgBitrate > 0 ? avgBitrate : nominalKbps;
 
         BitrateMode mode = switch (ident.codec()) {
-            case "vorbis" -> (ident.nominalBitrate() > 0 || pageCount > 2) ? BitrateMode.VBR : BitrateMode.UNKNOWN;
+            case "vorbis" -> detectVorbisBitrateMode(observedKbps, ident.nominalBitrate(), hasCommentMetadata);
             case "opus" -> BitrateMode.VBR;
             default -> BitrateMode.UNKNOWN;
         };
 
         return new OggProbeInfo(ident.codec(), ident.sampleRate(), ident.channels(), bitrateKbps, mode, durationMillis);
+    }
+
+    private static BitrateMode detectVorbisBitrateMode(
+            Set<Integer> observedKbps,
+            long nominalBitrate,
+            boolean hasCommentMetadata
+    ) {
+        if (observedKbps.size() > 1) {
+            return BitrateMode.VBR;
+        }
+        if (observedKbps.size() == 1) {
+            return BitrateMode.CBR;
+        }
+        if (nominalBitrate > 0 || hasCommentMetadata) {
+            return BitrateMode.UNKNOWN;
+        }
+        return BitrateMode.UNKNOWN;
     }
 
     private static AudioIdent parseIdentificationPacket(byte[] data, int identOffset, int payloadSize) throws CodecMediaException {
@@ -154,6 +207,137 @@ public final class OggParser {
         }
 
         return new OggPageHeader(version, headerType, granulePosition, serial, sequence, segmentCount, payload, total, headerSize);
+    }
+
+    private static boolean containsCodecCommentSignal(byte[] data, int offset, int payloadSize, String codec) {
+        if (offset < 0 || payloadSize <= 0 || offset + payloadSize > data.length) {
+            return false;
+        }
+        if ("vorbis".equals(codec)) {
+            return parseVorbisCommentSignal(data, offset, payloadSize);
+        }
+        if ("opus".equals(codec)) {
+            return parseOpusCommentSignal(data, offset, payloadSize);
+        }
+        return false;
+    }
+
+    private static boolean parseVorbisCommentSignal(byte[] data, int offset, int payloadSize) {
+        if (payloadSize < 11) {
+            return false;
+        }
+        if (data[offset] != 0x03
+                || data[offset + 1] != 'v'
+                || data[offset + 2] != 'o'
+                || data[offset + 3] != 'r'
+                || data[offset + 4] != 'b'
+                || data[offset + 5] != 'i'
+                || data[offset + 6] != 's') {
+            return false;
+        }
+        return parseCommentListForSignals(data, offset + 7, offset + payloadSize, true);
+    }
+
+    private static boolean parseOpusCommentSignal(byte[] data, int offset, int payloadSize) {
+        if (payloadSize < 12) {
+            return false;
+        }
+        if (data[offset] != 'O'
+                || data[offset + 1] != 'p'
+                || data[offset + 2] != 'u'
+                || data[offset + 3] != 's'
+                || data[offset + 4] != 'T'
+                || data[offset + 5] != 'a'
+                || data[offset + 6] != 'g'
+                || data[offset + 7] != 's') {
+            return false;
+        }
+        return parseCommentListForSignals(data, offset + 8, offset + payloadSize, false);
+    }
+
+    private static boolean parseCommentListForSignals(byte[] data, int pos, int end, boolean vorbis) {
+        int vendorLen = readU32LEAt(data, pos, end);
+        if (vendorLen < 0) {
+            return false;
+        }
+        pos += 4;
+        if (pos + vendorLen > end) {
+            return false;
+        }
+        pos += vendorLen;
+
+        int commentCount = readU32LEAt(data, pos, end);
+        if (commentCount < 0) {
+            return false;
+        }
+        pos += 4;
+
+        for (int i = 0; i < commentCount; i++) {
+            int commentLen = readU32LEAt(data, pos, end);
+            if (commentLen < 0) {
+                return false;
+            }
+            pos += 4;
+            if (pos + commentLen > end) {
+                return false;
+            }
+            int eq = -1;
+            for (int j = 0; j < commentLen; j++) {
+                if (data[pos + j] == '=') {
+                    eq = j;
+                    break;
+                }
+            }
+            if (eq > 0 && hasSignalCommentKey(data, pos, eq, vorbis)) {
+                return true;
+            }
+            pos += commentLen;
+        }
+        return false;
+    }
+
+    private static int readU32LEAt(byte[] data, int offset, int endExclusive) {
+        if (offset < 0 || offset + 4 > endExclusive || offset + 4 > data.length) {
+            return -1;
+        }
+        long value = (data[offset] & 0xFFL)
+                | ((data[offset + 1] & 0xFFL) << 8)
+                | ((data[offset + 2] & 0xFFL) << 16)
+                | ((data[offset + 3] & 0xFFL) << 24);
+        if (value > Integer.MAX_VALUE) {
+            return -1;
+        }
+        return (int) value;
+    }
+
+    private static boolean hasSignalCommentKey(byte[] data, int keyOffset, int keyLen, boolean vorbis) {
+        if (startsWithAsciiIgnoreCase(data, keyOffset, keyLen, "REPLAYGAIN_")) {
+            return true;
+        }
+        if (startsWithAsciiIgnoreCase(data, keyOffset, keyLen, "TRACKTOTAL")) {
+            return true;
+        }
+        if (startsWithAsciiIgnoreCase(data, keyOffset, keyLen, "ALBUMGAIN")) {
+            return true;
+        }
+        return !vorbis
+                && (startsWithAsciiIgnoreCase(data, keyOffset, keyLen, "R128_TRACK_GAIN")
+                || startsWithAsciiIgnoreCase(data, keyOffset, keyLen, "R128_ALBUM_GAIN"));
+    }
+
+    private static boolean startsWithAsciiIgnoreCase(byte[] data, int offset, int len, String prefix) {
+        if (prefix == null || prefix.isEmpty() || len < prefix.length()) {
+            return false;
+        }
+        for (int i = 0; i < prefix.length(); i++) {
+            int b = data[offset + i] & 0xFF;
+            char c = (char) (b >= 'a' && b <= 'z' ? (b - 32) : b);
+            char p = Character.toUpperCase(prefix.charAt(i));
+            if (c != p) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private record AudioIdent(

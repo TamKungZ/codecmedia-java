@@ -31,6 +31,9 @@ public final class Mp3Parser {
         int audioStart = skipId3v2(reader);
         int firstFrameOffset = findFrameOffset(data, audioStart);
         if (firstFrameOffset < 0) {
+            if (containsUnsupportedMpegLayer(data, audioStart)) {
+                throw new CodecMediaException("Unsupported MPEG audio layer: only Layer III (MP3) is supported");
+            }
             throw new CodecMediaException("No valid MP3 frame found");
         }
 
@@ -42,7 +45,8 @@ public final class Mp3Parser {
         int xingFrames = readXingFrameCountIfPresent(data, firstFrameOffset, firstFrame);
         int vbriFrames = readVbriFrameCountIfPresent(data, firstFrameOffset, firstFrame);
 
-        ParseStats stats = scanFrames(data, firstFrameOffset, firstFrame.sampleRate(), firstFrame.samplesPerFrame());
+        int scanLimit = effectiveAudioEndOffset(data);
+        ParseStats stats = scanFrames(data, firstFrameOffset, scanLimit, firstFrame.sampleRate(), firstFrame.samplesPerFrame());
         long durationMillis = estimateDurationMillis(stats, xingFrames, vbriFrames);
         int avgBitrate = estimateAverageBitrateKbps(stats, durationMillis);
         BitrateMode mode = detectBitrateMode(stats, xingFrames, vbriFrames);
@@ -90,6 +94,31 @@ public final class Mp3Parser {
             }
         }
         return -1;
+    }
+
+    private static boolean containsUnsupportedMpegLayer(byte[] data, int start) {
+        for (int i = Math.max(0, start); i + 4 <= data.length; i++) {
+            int h = ((data[i] & 0xFF) << 24)
+                    | ((data[i + 1] & 0xFF) << 16)
+                    | ((data[i + 2] & 0xFF) << 8)
+                    | (data[i + 3] & 0xFF);
+
+            if ((h & 0xFFE00000) != 0xFFE00000) {
+                continue;
+            }
+
+            int versionBits = (h >>> 19) & 0b11;
+            int layerBits = (h >>> 17) & 0b11;
+            int sampleRateIndex = (h >>> 10) & 0b11;
+
+            if (versionBits == 0b01 || sampleRateIndex == 0b11) {
+                continue;
+            }
+            if (layerBits == 0b10 || layerBits == 0b11) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static Mp3FrameHeader parseFrameHeader(byte[] data, int offset) {
@@ -173,16 +202,26 @@ public final class Mp3Parser {
         return readIntBE(data, vbriOffset + 14);
     }
 
-    private static ParseStats scanFrames(byte[] data, int startOffset, int sampleRate, int samplesPerFrame) {
+    private static int effectiveAudioEndOffset(byte[] data) {
+        if (data.length >= 128
+                && data[data.length - 128] == 'T'
+                && data[data.length - 127] == 'A'
+                && data[data.length - 126] == 'G') {
+            return data.length - 128;
+        }
+        return data.length;
+    }
+
+    private static ParseStats scanFrames(byte[] data, int startOffset, int scanLimit, int sampleRate, int samplesPerFrame) {
         int offset = startOffset;
         long totalBits = 0;
         long totalSamples = 0;
         int frames = 0;
         Set<Integer> bitrates = new HashSet<>();
 
-        while (offset + 4 <= data.length) {
+        while (offset + 4 <= scanLimit) {
             Mp3FrameHeader h = parseFrameHeader(data, offset);
-            if (h == null || offset + h.frameLength() > data.length) {
+            if (h == null || offset + h.frameLength() > scanLimit) {
                 break;
             }
 
@@ -200,12 +239,12 @@ public final class Mp3Parser {
         if (stats.frames() <= 0) {
             return 0;
         }
-        if (stats.totalSamples() > 0 && stats.sampleRate() > 0) {
-            return (stats.totalSamples() * 1000L) / stats.sampleRate();
-        }
         int knownFrames = xingFrames > 0 ? xingFrames : vbriFrames;
         if (knownFrames > 0 && stats.samplesPerFrame() > 0 && stats.sampleRate() > 0) {
             return ((long) knownFrames * stats.samplesPerFrame() * 1000L) / stats.sampleRate();
+        }
+        if (stats.totalSamples() > 0 && stats.sampleRate() > 0) {
+            return (stats.totalSamples() * 1000L) / stats.sampleRate();
         }
         return 0;
     }

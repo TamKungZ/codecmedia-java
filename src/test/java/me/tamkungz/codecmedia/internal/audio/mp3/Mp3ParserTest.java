@@ -1,8 +1,11 @@
 package me.tamkungz.codecmedia.internal.audio.mp3;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
+import me.tamkungz.codecmedia.CodecMediaException;
 import me.tamkungz.codecmedia.internal.audio.BitrateMode;
 
 class Mp3ParserTest {
@@ -52,6 +55,63 @@ class Mp3ParserTest {
         Mp3ProbeInfo info = Mp3Parser.parse(data);
 
         assertEquals(1, info.channels());
+        assertEquals(BitrateMode.CBR, info.bitrateMode());
+    }
+
+    @Test
+    void shouldPrioritizeXingFrameCountForDuration() throws Exception {
+        byte[] frame = createFrame(new byte[] {(byte) 0xFF, (byte) 0xFB, (byte) 0x90, 0x00}, 417);
+        // MPEG1 stereo => Xing header starts at frameOffset + 4 + 32 = 36
+        frame[36] = 'X';
+        frame[37] = 'i';
+        frame[38] = 'n';
+        frame[39] = 'g';
+        frame[40] = 0x00;
+        frame[41] = 0x00;
+        frame[42] = 0x00;
+        frame[43] = 0x01; // frames field present
+        frame[44] = 0x00;
+        frame[45] = 0x00;
+        frame[46] = 0x00;
+        frame[47] = 0x64; // 100 frames
+
+        byte[] data = new byte[frame.length * 3];
+        System.arraycopy(frame, 0, data, 0, frame.length);
+        System.arraycopy(frame, 0, data, frame.length, frame.length);
+        System.arraycopy(frame, 0, data, frame.length * 2, frame.length);
+
+        Mp3ProbeInfo info = Mp3Parser.parse(data);
+
+        assertEquals(2612, info.durationMillis()); // 100 * 1152 / 44100 * 1000
+    }
+
+    @Test
+    void shouldRejectNonLayer3WithClearError() {
+        byte[] headerLayer2 = new byte[] {(byte) 0xFF, (byte) 0xFD, (byte) 0x90, 0x00};
+        byte[] data = new byte[417 * 2];
+        System.arraycopy(headerLayer2, 0, data, 0, headerLayer2.length);
+        System.arraycopy(headerLayer2, 0, data, 417, headerLayer2.length);
+
+        CodecMediaException ex = assertThrows(CodecMediaException.class, () -> Mp3Parser.parse(data));
+        assertTrue(ex.getMessage().contains("Unsupported MPEG audio layer"));
+    }
+
+    @Test
+    void shouldIgnoreTrailingId3v1TagForParsing() throws Exception {
+        byte[] frame = createFrame(new byte[] {(byte) 0xFF, (byte) 0xFB, (byte) 0x90, 0x00}, 417);
+        byte[] data = new byte[frame.length * 3 + 128];
+        System.arraycopy(frame, 0, data, 0, frame.length);
+        System.arraycopy(frame, 0, data, frame.length, frame.length);
+        System.arraycopy(frame, 0, data, frame.length * 2, frame.length);
+
+        int tagOffset = frame.length * 3;
+        data[tagOffset] = 'T';
+        data[tagOffset + 1] = 'A';
+        data[tagOffset + 2] = 'G';
+
+        Mp3ProbeInfo info = Mp3Parser.parse(data);
+
+        assertEquals(128, info.bitrateKbps());
         assertEquals(BitrateMode.CBR, info.bitrateMode());
     }
 
