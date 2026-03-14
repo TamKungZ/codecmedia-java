@@ -27,5 +27,5 @@ jobs:
           cache: maven
 
       - name: Build and verify
-        run: mvn -B clean verify
+        run: mvn -B -Dgpg.skip=true clean verify
 

@@ -27,27 +27,27 @@ jobs:
           cache: maven
 
       - name: Compile and package gate
-        run: mvn -B -DskipTests clean package
+        run: mvn -B -Dgpg.skip=true -DskipTests clean package
 
       - name: Full project test suite
-        run: mvn -B test
+        run: mvn -B -Dgpg.skip=true test
 
       - name: Facade and integration-style tests
         run: |
-          mvn -B -Dtest=CodecMediaFacadeTest test
-          mvn -B -Dtest=CodecMediaRoundTripConversionTest test
-          mvn -B -Dtest=CodecMediaPlayTest test
+          mvn -B -Dgpg.skip=true -Dtest=CodecMediaFacadeTest test
+          mvn -B -Dgpg.skip=true -Dtest=CodecMediaRoundTripConversionTest test
+          mvn -B -Dgpg.skip=true -Dtest=CodecMediaPlayTest test
 
       - name: Audio parser unit tests
         run: |
-          mvn -B -Dtest=Mp3ParserTest test
-          mvn -B -Dtest=OggParserTest test
-          mvn -B -Dtest=WavParserTest test
-          mvn -B -Dtest=FlacParserTest test
-          mvn -B -Dtest=AiffParserTest test
+          mvn -B -Dgpg.skip=true -Dtest=Mp3ParserTest test
+          mvn -B -Dgpg.skip=true -Dtest=OggParserTest test
+          mvn -B -Dgpg.skip=true -Dtest=WavParserTest test
+          mvn -B -Dgpg.skip=true -Dtest=FlacParserTest test
+          mvn -B -Dgpg.skip=true -Dtest=AiffParserTest test
 
       - name: IO unit tests
-        run: mvn -B -Dtest=ByteArrayReaderTest test
+        run: mvn -B -Dgpg.skip=true -Dtest=ByteArrayReaderTest test
 
       - name: Usage example smoke test
-        run: mvn -B -Dtest=CodecMediaUsageExample test
+        run: mvn -B -Dgpg.skip=true -Dtest=CodecMediaUsageExample test
