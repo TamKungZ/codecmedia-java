@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added explicit decode-only intent comment in [`FlacCodec`](src/main/java/me/tamkungz/codecmedia/internal/audio/flac/FlacCodec.java).
 - Added AIFF parser tests for supported AIFC `NONE` and unsupported compression-type rejection in [`AiffParserTest`](src/test/java/me/tamkungz/codecmedia/internal/audio/aiff/AiffParserTest.java).
 - Added explicit decode-only intent comment in [`AiffCodec`](src/main/java/me/tamkungz/codecmedia/internal/audio/aiff/AiffCodec.java).
+- Added cross-repository smoke workflow in [`.github/workflows/cross-module-smoke.yml`](.github/workflows/cross-module-smoke.yml) to validate `codecmedia-java`, `codecmedia-cli`, and `codecmedia-kotlin` together across JDK 17/21.
 
 ### Verified
 - Confirmed MP3 parser updates with `mvn -Dtest=Mp3ParserTest test`.
@@ -35,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Confirmed WAV parser updates with `mvn -Dtest=WavParserTest test`.
 - Confirmed FLAC parser updates with `mvn -Dtest=FlacParserTest test`.
 - Confirmed AIFF parser updates with `mvn -Dtest=AiffParserTest test`.
+- Confirmed CLI argument/dispatch regression tests in [`CodecMediaCliTest`](../codecmedia-cli/src/test/java/me/tamkungz/codecmedia/CodecMediaCliTest.java) with `mvn test` (in `codecmedia-cli`).
+- Confirmed Kotlin wrapper refactor stability with `gradlew.bat test` (in `codecmedia-kotlin`).
 
 ## [1.1.0] - 2026-03-13
 

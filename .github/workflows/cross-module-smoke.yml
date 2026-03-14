@@ -1,0 +1,53 @@
+name: Cross Module Smoke
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        java: ['17', '21']
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout java repo
+        uses: actions/checkout@v4
+        with:
+          path: codecmedia-java
+
+      - name: Checkout cli repo
+        uses: actions/checkout@v4
+        with:
+          repository: CodecMediaLib/codecmedia-cli
+          path: codecmedia-cli
+
+      - name: Checkout kotlin repo
+        uses: actions/checkout@v4
+        with:
+          repository: CodecMediaLib/codecmedia-kotlin
+          path: codecmedia-kotlin
+
+      - name: Set up JDK ${{ matrix.java }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+          cache: maven
+
+      - name: Install java core locally
+        working-directory: codecmedia-java
+        run: mvn -B -Dgpg.skip=true -DskipTests clean install
+
+      - name: Build and test CLI against local core
+        working-directory: codecmedia-cli
+        run: mvn -B -Dgpg.skip=true test
+
+      - name: Build and test Kotlin wrapper against local core
+        working-directory: codecmedia-kotlin
+        run: ./gradlew clean test -x sign
