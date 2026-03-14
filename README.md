@@ -40,7 +40,7 @@ CodecMedia is a Java library for media probing, validation, metadata sidecar per
 - MOV/MP4/WebM probe tags now include richer video metadata when present (for example `displayAspectRatio`, `bitDepth`, `videoBitrateKbps`, `audioBitrateKbps`)
 - Metadata read/write with sidecar persistence (`.codecmedia.properties`)
 - In-Java extraction and conversion file operations
-- Image-to-image conversion in Java for: `png`, `jpg`/`jpeg`, `webp`, `bmp`, `tif`/`tiff`, `heic`/`heif`
+- Image-to-image conversion in Java for: `png`, `jpg`/`jpeg`, `webp`, `bmp`, `tif`/`tiff`, `heic`/`heif`/`avif`
 - Playback API with dry-run support and optional desktop-open backend
 - Conversion hub routing with explicit unsupported routes and a stub `wav <-> pcm` path
 
@@ -62,6 +62,7 @@ CodecMedia is a Java library for media probing, validation, metadata sidecar per
 - `readMetadata` currently uses sidecar metadata persistence; it is **not** a full embedded tag extractor (for example ID3 album art/APIC).
 - Audio-to-audio conversion is not implemented yet for real transcode cases (for example `mp3 -> ogg`).
 - The only temporary audio conversion path is a stub `wav <-> pcm` route.
+- Container/unknown conversion routes are intentionally unsupported unless explicitly mapped by the conversion route resolver.
 - For OpenAL workflows that require OGG from MP3 input, use an external transcoder first (for example ffmpeg), then play the produced OGG.
 
 ## Requirements

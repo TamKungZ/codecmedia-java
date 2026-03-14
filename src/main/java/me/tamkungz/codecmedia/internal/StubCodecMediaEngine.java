@@ -110,7 +110,7 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
                 return new ProbeResult(input, mimeTypeByExtension(extension), extension, mediaTypeByExtension(extension), null, List.of(), Map.of("sizeBytes", String.valueOf(size)));
             }
 
-            byte[] bytes = Files.readAllBytes(input);
+            byte[] bytes = size <= prefix.length ? prefix : Files.readAllBytes(input);
 
             if (likelyMp3) {
                 if (bytes.length >= 4) {
@@ -639,7 +639,7 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
         String requestedExtension = normalizeExtension(effective.targetFormat());
         if (!requestedExtension.equals(sourceExtension)) {
             throw new CodecMediaException(
-                    "Stub extractAudio does not transcode. Requested format '" + requestedExtension
+                    "Audio extraction does not support format conversion yet. Requested format '" + requestedExtension
                             + "' must match source format '" + sourceExtension + "'"
             );
         }

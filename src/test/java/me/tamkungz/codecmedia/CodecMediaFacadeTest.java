@@ -127,6 +127,31 @@ class CodecMediaFacadeTest {
     }
 
     @Test
+    void extractAudio_shouldUseUserFacingMessageWhenFormatConversionRequested() throws Exception {
+        CodecMediaEngine engine = CodecMedia.createDefault();
+        Path tempMp3 = createTempFileWithResource("c-major-scale_test_web-convert_mono.mp3", ".mp3");
+        Path outputDir = Files.createTempDirectory("codecmedia-extract-mismatch-");
+
+        try {
+            boolean threw = false;
+            try {
+                engine.extractAudio(
+                        tempMp3,
+                        outputDir,
+                        new me.tamkungz.codecmedia.options.AudioExtractOptions("wav", 192, 0)
+                );
+            } catch (CodecMediaException expected) {
+                threw = expected.getMessage().contains("Audio extraction does not support format conversion yet")
+                        && !expected.getMessage().contains("Stub");
+            }
+            assertTrue(threw);
+        } finally {
+            deleteDirectory(outputDir);
+            Files.deleteIfExists(tempMp3);
+        }
+    }
+
+    @Test
     void convert_shouldRespectOverwriteFlag() throws Exception {
         CodecMediaEngine engine = CodecMedia.createDefault();
         Path tempMp3 = createTempFileWithResource("c-major-scale_test_audacity.mp3", ".mp3");
@@ -233,6 +258,33 @@ class CodecMediaFacadeTest {
         } finally {
             Files.deleteIfExists(outputPng);
             Files.deleteIfExists(tempJpg);
+        }
+    }
+
+    @Test
+    void convert_shouldTranscodePngToAvif() throws Exception {
+        CodecMediaEngine engine = CodecMedia.createDefault();
+        Path tempPng = createTempFileWithResource("png_test.png", ".png");
+        Path outputAvif = Files.createTempFile("codecmedia-png-to-avif-", ".avif");
+
+        try {
+            try {
+                var converted = engine.convert(tempPng, outputAvif,
+                        new me.tamkungz.codecmedia.options.ConversionOptions("avif", "balanced", true));
+                assertEquals("avif", converted.format());
+                assertTrue(converted.reencoded());
+                assertTrue(Files.exists(outputAvif));
+                assertTrue(Files.size(outputAvif) > 0);
+
+                var probed = engine.probe(outputAvif);
+                assertTrue(probed.extension().equals("avif") || probed.extension().equals("heif") || probed.extension().equals("heic"));
+                assertEquals(me.tamkungz.codecmedia.model.MediaType.IMAGE, probed.mediaType());
+            } catch (CodecMediaException expectedRuntimeLimit) {
+                assertTrue(expectedRuntimeLimit.getMessage().contains("HEIF writer"));
+            }
+        } finally {
+            Files.deleteIfExists(outputAvif);
+            Files.deleteIfExists(tempPng);
         }
     }
 

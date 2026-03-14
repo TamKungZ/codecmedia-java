@@ -8,6 +8,8 @@ public final class ConversionRouteResolver {
     }
 
     public static ConversionRoute resolve(MediaType source, MediaType target) {
+        // Intentional: null, UNKNOWN, CONTAINER, and any non-mapped pairs are
+        // currently treated as UNSUPPORTED until explicit route handlers exist.
         if (source == null || target == null) {
             return ConversionRoute.UNSUPPORTED;
         }

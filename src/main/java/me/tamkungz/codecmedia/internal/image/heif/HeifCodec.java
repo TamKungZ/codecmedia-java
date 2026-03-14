@@ -53,6 +53,10 @@ public final class HeifCodec {
         if ("heic".equals(value)) {
             return "heic";
         }
+        if ("avif".equals(value)) {
+            // Route AVIF through the HEIF writer path used by the current runtime integration.
+            return "heif";
+        }
         throw new CodecMediaException("Unsupported HEIF target extension: " + extension);
     }
 

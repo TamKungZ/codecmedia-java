@@ -20,7 +20,7 @@ public final class ImageTranscodeConverter implements MediaConverter {
         String source = normalize(request.sourceExtension());
         String target = normalize(request.targetExtension());
         if (!isSupportedImage(source) || !isSupportedImage(target)) {
-            throw new CodecMediaException("image->image transcoding currently supports png/jpg/jpeg/webp/bmp/tiff/heif/heic");
+            throw new CodecMediaException("image->image transcoding currently supports png/jpg/jpeg/webp/bmp/tiff/heif/heic/avif");
         }
 
         Path output = request.output();
@@ -51,7 +51,8 @@ public final class ImageTranscodeConverter implements MediaConverter {
                 || "tif".equals(ext)
                 || "tiff".equals(ext)
                 || "heif".equals(ext)
-                || "heic".equals(ext);
+                || "heic".equals(ext)
+                || "avif".equals(ext);
     }
 
     private static BufferedImage decodeByExtension(String extension, Path input) throws CodecMediaException {
@@ -61,7 +62,7 @@ public final class ImageTranscodeConverter implements MediaConverter {
             case "webp" -> WebpCodec.decode(input);
             case "bmp" -> BmpCodec.decode(input);
             case "tif", "tiff" -> TiffCodec.decode(input);
-            case "heif", "heic" -> HeifCodec.decode(input);
+            case "heif", "heic", "avif" -> HeifCodec.decode(input);
             default -> throw new CodecMediaException("Unsupported source image extension: " + extension);
         };
     }
@@ -73,7 +74,7 @@ public final class ImageTranscodeConverter implements MediaConverter {
             case "webp" -> WebpCodec.encode(inputImage, output);
             case "bmp" -> BmpCodec.encode(inputImage, output);
             case "tif", "tiff" -> TiffCodec.encode(inputImage, output);
-            case "heif", "heic" -> HeifCodec.encode(inputImage, output, extension);
+            case "heif", "heic", "avif" -> HeifCodec.encode(inputImage, output, extension);
             default -> throw new CodecMediaException("Unsupported target image extension: " + extension);
         }
     }

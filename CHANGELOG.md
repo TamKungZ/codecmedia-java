@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-03-15
+
+### Added
+- Added safe top-level codec helper [`ProbeResult.primaryCodec()`](src/main/java/me/tamkungz/codecmedia/model/ProbeResult.java) to avoid direct `streams().get(0)` access for empty-stream cases.
+- Added no-arg [`ConversionOptions.defaults()`](src/main/java/me/tamkungz/codecmedia/options/ConversionOptions.java) with fallback target format.
+- Added model/options consistency tests in [`ModelOptionsConsistencyTest`](src/test/java/me/tamkungz/codecmedia/model/ModelOptionsConsistencyTest.java).
+- Added AVIF image transcode regression coverage in [`CodecMediaFacadeTest`](src/test/java/me/tamkungz/codecmedia/CodecMediaFacadeTest.java), including runtime-safe behavior when HEIF/AVIF writers are unavailable.
+
+### Changed
+- Aligned [`ConversionOptions.defaults(String)`](src/main/java/me/tamkungz/codecmedia/options/ConversionOptions.java) with fallback behavior for `null`/blank target format.
+- Documented default validation policy in [`ValidationOptions.defaults()`](src/main/java/me/tamkungz/codecmedia/options/ValidationOptions.java), including 500 MiB default size limit.
+- Documented nullable semantics of [`PlaybackResult.message`](src/main/java/me/tamkungz/codecmedia/model/PlaybackResult.java).
+- Extended image transcode extension routing in [`ImageTranscodeConverter`](src/main/java/me/tamkungz/codecmedia/internal/convert/ImageTranscodeConverter.java) to recognize `avif` as part of the HEIF-family conversion path.
+- Clarified intentional unsupported fallback behavior in [`ConversionRouteResolver`](src/main/java/me/tamkungz/codecmedia/internal/convert/ConversionRouteResolver.java) for `null`/unknown/container/non-mapped routes.
+- Updated image conversion support notes in [`README.md`](README.md) to include `avif` and document intentional unsupported container/unknown route handling.
+- Optimized [`StubCodecMediaEngine.probe()`](src/main/java/me/tamkungz/codecmedia/internal/StubCodecMediaEngine.java) to avoid redundant full-file reads when the probe prefix already contains the complete file.
+- Reworded [`StubCodecMediaEngine.extractAudio()`](src/main/java/me/tamkungz/codecmedia/internal/StubCodecMediaEngine.java) format-mismatch error message to user-facing language (removed internal "Stub" wording).
+
+### Verified
+- Confirmed model/options polish via `mvn -Dtest=ModelOptionsConsistencyTest test`.
+- Confirmed AVIF conversion-path regression with `mvn -Dtest=CodecMediaFacadeTest#convert_shouldTranscodePngToAvif test`.
+- Confirmed facade behavior regression coverage with `mvn -Dtest=CodecMediaFacadeTest test`.
+
 ## [1.1.1] - 2026-03-14
 
 ### Fixed
