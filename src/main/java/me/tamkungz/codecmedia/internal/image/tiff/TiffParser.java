@@ -26,6 +26,11 @@ public final class TiffParser {
 
         int entryCount = readU16(bytes, ifdOffset, littleEndian);
         int pos = ifdOffset + 2;
+        int maxEntries = (bytes.length - pos) / 12;
+        if (entryCount > maxEntries) {
+            throw new CodecMediaException("TIFF IFD entry count exceeds available data");
+        }
+
         Integer width = null;
         Integer height = null;
         Integer bitDepth = null;

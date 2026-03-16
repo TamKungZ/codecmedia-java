@@ -50,8 +50,22 @@ public final class PngParser {
         if (width <= 0 || height <= 0) {
             throw new CodecMediaException("PNG has invalid dimensions");
         }
+        if (!isValidBitDepth(bitDepth)) {
+            throw new CodecMediaException("PNG has invalid bit depth: " + bitDepth);
+        }
+        if (!isValidColorType(colorType)) {
+            throw new CodecMediaException("PNG has invalid color type: " + colorType);
+        }
 
         return new PngProbeInfo(width, height, bitDepth, colorType);
+    }
+
+    private static boolean isValidBitDepth(int bitDepth) {
+        return bitDepth == 1 || bitDepth == 2 || bitDepth == 4 || bitDepth == 8 || bitDepth == 16;
+    }
+
+    private static boolean isValidColorType(int colorType) {
+        return colorType == 0 || colorType == 2 || colorType == 3 || colorType == 4 || colorType == 6;
     }
 
     private static int readBeInt(byte[] bytes, int offset) throws CodecMediaException {

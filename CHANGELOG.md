@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3] - 2026-03-16
+
+### Fixed
+- Added strict PNG bit-depth validation in [`PngParser.parse()`](src/main/java/me/tamkungz/codecmedia/internal/image/png/PngParser.java) to reject malformed IHDR values outside the PNG spec (`1`, `2`, `4`, `8`, `16`).
+- Added helper [`PngParser.isValidBitDepth()`](src/main/java/me/tamkungz/codecmedia/internal/image/png/PngParser.java) to centralize allowed PNG bit-depth values during probe.
+- Added PNG color-type validation in [`PngParser.parse()`](src/main/java/me/tamkungz/codecmedia/internal/image/png/PngParser.java) with helper [`PngParser.isValidColorType()`](src/main/java/me/tamkungz/codecmedia/internal/image/png/PngParser.java) to accept only spec-valid values (`0`, `2`, `3`, `4`, `6`).
+- Refined JPEG signature sniffing in [`JpegParser.isLikelyJpeg()`](src/main/java/me/tamkungz/codecmedia/internal/image/jpeg/JpegParser.java) to require the exact 3-byte SOI/prefix check actually used by the parser.
+- Hardened JPEG SOF validation in [`JpegParser.parse()`](src/main/java/me/tamkungz/codecmedia/internal/image/jpeg/JpegParser.java) to reject invalid `bitsPerSample` (only `8`/`12`) and unsupported component counts (only `1`/`3`/`4`).
+- Improved JPEG marker traversal in [`JpegParser.parse()`](src/main/java/me/tamkungz/codecmedia/internal/image/jpeg/JpegParser.java) to correctly tolerate repeated `0xFF` fill bytes while preserving marker alignment validation.
+- Corrected HEIF `pixi` FullBox payload parsing in [`HeifParser.extractPixiBitDepth()`](src/main/java/me/tamkungz/codecmedia/internal/image/heif/HeifParser.java) by skipping the 4-byte FullBox header before reading channel count and per-channel depths.
+- Documented FullBox offset semantics for `ispe` extraction in [`HeifParser.extractIspeWidth()`](src/main/java/me/tamkungz/codecmedia/internal/image/heif/HeifParser.java) and [`HeifParser.extractIspeHeight()`](src/main/java/me/tamkungz/codecmedia/internal/image/heif/HeifParser.java).
+- Removed non-container boxes (`mdat`, `skip`, `free`) from recursive traversal candidates in [`HeifParser.isContainerType()`](src/main/java/me/tamkungz/codecmedia/internal/image/heif/HeifParser.java) to avoid unnecessary payload recursion.
+- Added bounds-checked big-endian integer reads in [`HeifParser.readBeInt()`](src/main/java/me/tamkungz/codecmedia/internal/image/heif/HeifParser.java) to return codec-domain errors instead of runtime index failures on malformed inputs.
+- Added strict BMP `bitsPerPixel` validation in [`BmpParser.parse()`](src/main/java/me/tamkungz/codecmedia/internal/image/bmp/BmpParser.java) via [`BmpParser.isValidBitsPerPixel()`](src/main/java/me/tamkungz/codecmedia/internal/image/bmp/BmpParser.java), allowing only spec-valid values (`1`, `2`, `4`, `8`, `16`, `24`, `32`).
+- Added defensive TIFF IFD entry-count bounds validation in [`TiffParser.parse()`](src/main/java/me/tamkungz/codecmedia/internal/image/tiff/TiffParser.java) to reject corrupt `entryCount` values that exceed available bytes.
+- Documented WebP probe bit-depth assumption in [`WebpParser`](src/main/java/me/tamkungz/codecmedia/internal/image/webp/WebpParser.java) with explicit constant [`ASSUMED_WEBP_BIT_DEPTH`](src/main/java/me/tamkungz/codecmedia/internal/image/webp/WebpParser.java), applied consistently across `VP8`, `VP8L`, and `VP8X` parsing.
+
+### Verified
+- Confirmed compile stability after PNG/JPEG/HEIF/BMP/TIFF/WebP parser hardening with `mvn -q -DskipTests compile`.
+
 ## [1.1.2] - 2026-03-15
 
 ### Added

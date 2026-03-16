@@ -8,7 +8,7 @@ public final class JpegParser {
     }
 
     public static boolean isLikelyJpeg(byte[] bytes) {
-        return bytes.length >= 4
+        return bytes.length >= 3
                 && (bytes[0] & 0xFF) == 0xFF
                 && (bytes[1] & 0xFF) == 0xD8
                 && (bytes[2] & 0xFF) == 0xFF;
@@ -21,12 +21,19 @@ public final class JpegParser {
 
         int pos = 2; // after SOI
         while (pos + 4 <= bytes.length) {
-            if ((bytes[pos] & 0xFF) != 0xFF) {
+            int markerPrefixStart = pos;
+            while (pos < bytes.length && (bytes[pos] & 0xFF) == 0xFF) {
+                pos++; // skip marker prefix + fill bytes between markers
+            }
+            if (pos == markerPrefixStart) {
                 throw new CodecMediaException("Invalid JPEG marker alignment");
             }
+            if (pos >= bytes.length) {
+                throw new CodecMediaException("Unexpected end of JPEG while reading marker");
+            }
 
-            int marker = bytes[pos + 1] & 0xFF;
-            pos += 2;
+            int marker = bytes[pos] & 0xFF;
+            pos++;
 
             if (marker == 0xD9 || marker == 0xDA) {
                 break; // EOI or SOS; no frame header found yet
@@ -60,8 +67,14 @@ public final class JpegParser {
                 int width = readBeShort(bytes, segmentDataStart + 3);
                 int channels = bytes[segmentDataStart + 5] & 0xFF;
 
-                if (width <= 0 || height <= 0 || channels <= 0) {
-                    throw new CodecMediaException("JPEG has invalid dimensions/components");
+                if (width <= 0 || height <= 0) {
+                    throw new CodecMediaException("JPEG has invalid dimensions");
+                }
+                if (!isValidBitsPerSample(bitsPerSample)) {
+                    throw new CodecMediaException("Invalid JPEG bit precision: " + bitsPerSample);
+                }
+                if (!isValidChannels(channels)) {
+                    throw new CodecMediaException("Invalid JPEG component count: " + channels);
                 }
                 return new JpegProbeInfo(width, height, bitsPerSample, channels);
             }
@@ -77,6 +90,14 @@ public final class JpegParser {
             throw new CodecMediaException("Unexpected end of JPEG data");
         }
         return ((bytes[offset] & 0xFF) << 8) | (bytes[offset + 1] & 0xFF);
+    }
+
+    private static boolean isValidBitsPerSample(int bitsPerSample) {
+        return bitsPerSample == 8 || bitsPerSample == 12;
+    }
+
+    private static boolean isValidChannels(int channels) {
+        return channels == 1 || channels == 3 || channels == 4;
     }
 
     private static boolean isSofMarker(int marker) {

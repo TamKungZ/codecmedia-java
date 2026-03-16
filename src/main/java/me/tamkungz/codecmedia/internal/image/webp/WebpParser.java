@@ -4,6 +4,9 @@ import me.tamkungz.codecmedia.CodecMediaException;
 
 public final class WebpParser {
 
+    // Probe-level default: WebP variants are reported as 8-bit unless deeper bit-depth metadata is parsed.
+    private static final int ASSUMED_WEBP_BIT_DEPTH = 8;
+
     private WebpParser() {
     }
 
@@ -36,7 +39,7 @@ public final class WebpParser {
         }
         int widthMinus1 = (bytes[24] & 0xFF) | ((bytes[25] & 0xFF) << 8) | ((bytes[26] & 0xFF) << 16);
         int heightMinus1 = (bytes[27] & 0xFF) | ((bytes[28] & 0xFF) << 8) | ((bytes[29] & 0xFF) << 16);
-        return ensurePositive(widthMinus1 + 1, heightMinus1 + 1, 8, "VP8X");
+        return ensurePositive(widthMinus1 + 1, heightMinus1 + 1, ASSUMED_WEBP_BIT_DEPTH, "VP8X");
     }
 
     private static WebpProbeInfo parseVp8L(byte[] bytes) throws CodecMediaException {
@@ -52,7 +55,7 @@ public final class WebpParser {
         int b4 = bytes[24] & 0xFF;
         int widthMinus1 = b1 | ((b2 & 0x3F) << 8);
         int heightMinus1 = ((b2 >> 6) & 0x03) | (b3 << 2) | ((b4 & 0x0F) << 10);
-        return ensurePositive(widthMinus1 + 1, heightMinus1 + 1, 8, "VP8L");
+        return ensurePositive(widthMinus1 + 1, heightMinus1 + 1, ASSUMED_WEBP_BIT_DEPTH, "VP8L");
     }
 
     private static WebpProbeInfo parseVp8(byte[] bytes) throws CodecMediaException {
@@ -64,7 +67,7 @@ public final class WebpParser {
         }
         int width = ((bytes[27] & 0x3F) << 8) | (bytes[26] & 0xFF);
         int height = ((bytes[29] & 0x3F) << 8) | (bytes[28] & 0xFF);
-        return ensurePositive(width, height, 8, "VP8");
+        return ensurePositive(width, height, ASSUMED_WEBP_BIT_DEPTH, "VP8");
     }
 
     private static String fourcc(byte[] bytes, int offset) throws CodecMediaException {

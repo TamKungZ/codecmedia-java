@@ -1,6 +1,7 @@
 # CodecMedia
 
 [![MvnRepository](https://badges.mvnrepository.com/badge/me.tamkungz.codecmedia/codecmedia/badge.svg?label=MvnRepository)](https://mvnrepository.com/artifact/me.tamkungz.codecmedia/codecmedia)
+[![Sonatype Central](https://img.shields.io/badge/Sonatype%20Central-codecmedia-1f6feb)](https://central.sonatype.com/artifact/me.tamkungz.codecmedia/codecmedia)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Java](https://img.shields.io/badge/Java-17%2B-ED8B00?logo=openjdk&logoColor=white)](https://openjdk.org/)
 [![Maven](https://img.shields.io/badge/Maven-3.9%2B-C71A36?logo=apachemaven&logoColor=white)](https://maven.apache.org/)
@@ -63,6 +64,8 @@ CodecMedia is a Java library for media probing, validation, metadata sidecar per
 - Audio-to-audio conversion is not implemented yet for real transcode cases (for example `mp3 -> ogg`).
 - The only temporary audio conversion path is a stub `wav <-> pcm` route.
 - Container/unknown conversion routes are intentionally unsupported unless explicitly mapped by the conversion route resolver.
+- TIFF probe currently reads the **first IFD/image** only (multi-page TIFF traversal is not implemented in probe mode).
+- WebP probe currently reports `bitDepth` as an assumed default (`8`) for `VP8`/`VP8L`/`VP8X` unless deeper profile metadata parsing is added.
 - For OpenAL workflows that require OGG from MP3 input, use an external transcoder first (for example ffmpeg), then play the produced OGG.
 
 ## Requirements

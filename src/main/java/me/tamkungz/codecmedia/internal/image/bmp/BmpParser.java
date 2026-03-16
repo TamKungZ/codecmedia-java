@@ -39,11 +39,21 @@ public final class BmpParser {
         if (width <= 0 || height <= 0) {
             throw new CodecMediaException("BMP has invalid dimensions");
         }
-        if (bitsPerPixel <= 0) {
-            throw new CodecMediaException("BMP has invalid bits-per-pixel");
+        if (!isValidBitsPerPixel(bitsPerPixel)) {
+            throw new CodecMediaException("BMP has invalid bits-per-pixel: " + bitsPerPixel);
         }
 
         return new BmpProbeInfo(width, height, bitsPerPixel);
+    }
+
+    private static boolean isValidBitsPerPixel(int bitsPerPixel) {
+        return bitsPerPixel == 1
+                || bitsPerPixel == 2
+                || bitsPerPixel == 4
+                || bitsPerPixel == 8
+                || bitsPerPixel == 16
+                || bitsPerPixel == 24
+                || bitsPerPixel == 32;
     }
 
     private static int readU16LE(byte[] bytes, int offset) throws CodecMediaException {

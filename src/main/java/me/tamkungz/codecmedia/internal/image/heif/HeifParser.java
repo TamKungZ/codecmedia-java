@@ -6,6 +6,8 @@ import me.tamkungz.codecmedia.CodecMediaException;
 
 public final class HeifParser {
 
+    private static final int FULL_BOX_HEADER_SIZE = 4;
+
     private HeifParser() {
     }
 
@@ -47,18 +49,20 @@ public final class HeifParser {
         return new String(bytes, offset, length, StandardCharsets.US_ASCII);
     }
 
-    private static Integer extractIspeWidth(BoxData ispe) {
+    private static Integer extractIspeWidth(BoxData ispe) throws CodecMediaException {
         if (ispe == null || ispe.payloadOffset() + 12 > ispe.boxEnd()) {
             return null;
         }
+        // ispe is a FullBox: [version(1) + flags(3)] + width(4) + height(4)
         int width = readBeInt(ispe.bytes(), ispe.payloadOffset() + 4);
         return width > 0 ? width : null;
     }
 
-    private static Integer extractIspeHeight(BoxData ispe) {
+    private static Integer extractIspeHeight(BoxData ispe) throws CodecMediaException {
         if (ispe == null || ispe.payloadOffset() + 12 > ispe.boxEnd()) {
             return null;
         }
+        // ispe is a FullBox: [version(1) + flags(3)] + width(4) + height(4)
         int height = readBeInt(ispe.bytes(), ispe.payloadOffset() + 8);
         return height > 0 ? height : null;
     }
@@ -69,16 +73,17 @@ public final class HeifParser {
         }
         byte[] bytes = pixi.bytes();
         int payloadOffset = pixi.payloadOffset();
-        if (payloadOffset + 1 > pixi.boxEnd()) {
+        int dataOffset = payloadOffset + FULL_BOX_HEADER_SIZE;
+        if (dataOffset + 1 > pixi.boxEnd()) {
             return null;
         }
-        int channelCount = bytes[payloadOffset] & 0xFF;
-        if (channelCount <= 0 || payloadOffset + 1 + channelCount > pixi.boxEnd()) {
+        int channelCount = bytes[dataOffset] & 0xFF;
+        if (channelCount <= 0 || dataOffset + 1 + channelCount > pixi.boxEnd()) {
             return null;
         }
         int minDepth = Integer.MAX_VALUE;
         for (int i = 0; i < channelCount; i++) {
-            int depth = bytes[payloadOffset + 1 + i] & 0xFF;
+            int depth = bytes[dataOffset + 1 + i] & 0xFF;
             if (depth > 0 && depth < minDepth) {
                 minDepth = depth;
             }
@@ -204,9 +209,6 @@ public final class HeifParser {
                 || "ilst".equals(type)
                 || "tref".equals(type)
                 || "mfra".equals(type)
-                || "skip".equals(type)
-                || "free".equals(type)
-                || "mdat".equals(type)
                 || "jp2h".equals(type)
                 || "res ".equals(type)
                 || "uuid".equals(type)
@@ -244,7 +246,10 @@ public final class HeifParser {
                 | (bytes[offset + 7] & 0xFFL);
     }
 
-    private static int readBeInt(byte[] bytes, int offset) {
+    private static int readBeInt(byte[] bytes, int offset) throws CodecMediaException {
+        if (offset < 0 || offset + 4 > bytes.length) {
+            throw new CodecMediaException("Unexpected end of HEIF data");
+        }
         return ((bytes[offset] & 0xFF) << 24)
                 | ((bytes[offset + 1] & 0xFF) << 16)
                 | ((bytes[offset + 2] & 0xFF) << 8)
