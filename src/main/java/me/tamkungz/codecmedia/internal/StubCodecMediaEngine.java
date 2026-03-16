@@ -30,6 +30,7 @@ import me.tamkungz.codecmedia.internal.audio.flac.FlacCodec;
 import me.tamkungz.codecmedia.internal.audio.flac.FlacParser;
 import me.tamkungz.codecmedia.internal.audio.flac.FlacProbeInfo;
 import me.tamkungz.codecmedia.internal.audio.mp3.Mp3Codec;
+import me.tamkungz.codecmedia.internal.audio.mp3.Mp3Id3v1Tag;
 import me.tamkungz.codecmedia.internal.audio.mp3.Mp3Parser;
 import me.tamkungz.codecmedia.internal.audio.mp3.Mp3ProbeInfo;
 import me.tamkungz.codecmedia.internal.audio.ogg.OggCodec;
@@ -592,16 +593,10 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
         entries.put("mimeType", probe.mimeType());
         entries.put("extension", probe.extension());
         entries.put("mediaType", probe.mediaType().name());
-
-        if ("wav".equals(normalizeExtension(probe.extension()))) {
-            try {
-                Map<String, String> wavInfo = WavParser.readInfoMetadata(Files.readAllBytes(input));
-                for (Map.Entry<String, String> infoEntry : wavInfo.entrySet()) {
-                    entries.putIfAbsent(infoEntry.getKey(), infoEntry.getValue());
-                }
-            } catch (IOException e) {
-                throw new CodecMediaException("Failed to read WAV metadata: " + input, e);
-            }
+        String normalizedExtension = normalizeExtension(probe.extension());
+        Map<String, String> embeddedEntries = readEmbeddedMetadata(input, normalizedExtension);
+        for (Map.Entry<String, String> entry : embeddedEntries.entrySet()) {
+            entries.put(entry.getKey(), entry.getValue());
         }
 
         Path sidecar = metadataSidecarPath(input);
@@ -613,7 +608,9 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
                 throw new CodecMediaException("Failed to read metadata sidecar: " + sidecar, e);
             }
             for (String key : properties.stringPropertyNames()) {
-                entries.putIfAbsent(key, properties.getProperty(key));
+                if (!isCoreMetadataKey(key)) {
+                    entries.putIfAbsent(key, properties.getProperty(key));
+                }
             }
         }
 
@@ -642,9 +639,34 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
                 byte[] wavBytes = Files.readAllBytes(input);
                 byte[] withMetadata = WavParser.writeInfoMetadata(wavBytes, metadata.entries());
                 Files.write(input, withMetadata);
+                deleteSidecarIfExists(input);
                 return;
             } catch (IOException e) {
                 throw new CodecMediaException("Failed to write WAV metadata: " + input, e);
+            }
+        }
+
+        if ("aif".equals(extension) || "aiff".equals(extension) || "aifc".equals(extension)) {
+            try {
+                byte[] aiffBytes = Files.readAllBytes(input);
+                byte[] withMetadata = AiffParser.writeTextMetadata(aiffBytes, metadata.entries());
+                Files.write(input, withMetadata);
+                deleteSidecarIfExists(input);
+                return;
+            } catch (IOException e) {
+                throw new CodecMediaException("Failed to write AIFF metadata: " + input, e);
+            }
+        }
+
+        if ("mp3".equals(extension)) {
+            try {
+                byte[] mp3Bytes = Files.readAllBytes(input);
+                byte[] withTag = Mp3Id3v1Tag.write(mp3Bytes, metadata.entries());
+                Files.write(input, withTag);
+                deleteSidecarIfExists(input);
+                return;
+            } catch (IOException e) {
+                throw new CodecMediaException("Failed to write MP3 metadata: " + input, e);
             }
         }
 
@@ -973,6 +995,30 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
 
     private static Path metadataSidecarPath(Path input) {
         return input.resolveSibling(input.getFileName() + ".codecmedia.properties");
+    }
+
+    private static void deleteSidecarIfExists(Path input) throws IOException {
+        Files.deleteIfExists(metadataSidecarPath(input));
+    }
+
+    private static boolean isCoreMetadataKey(String key) {
+        return "mimeType".equals(key) || "extension".equals(key) || "mediaType".equals(key);
+    }
+
+    private static Map<String, String> readEmbeddedMetadata(Path input, String normalizedExtension) throws CodecMediaException {
+        try {
+            byte[] bytes = Files.readAllBytes(input);
+            return switch (normalizedExtension) {
+                case "wav" -> WavParser.readInfoMetadata(bytes);
+                case "aif", "aiff", "aifc" -> AiffParser.readTextMetadata(bytes);
+                case "mp3" -> Mp3Id3v1Tag.read(bytes);
+                case "ogg" -> OggParser.readCommentMetadata(bytes);
+                case "flac" -> FlacParser.readVorbisCommentMetadata(bytes);
+                default -> Map.of();
+            };
+        } catch (IOException e) {
+            throw new CodecMediaException("Failed to read embedded metadata: " + input, e);
+        }
     }
 
     private static String normalizeExtension(String format) {

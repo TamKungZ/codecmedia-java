@@ -10,15 +10,14 @@ public final class DefaultConversionHub implements ConversionHub {
     private final MediaConverter videoToAudioConverter = new UnsupportedRouteConverter(
             "video->audio conversion is not implemented yet (planned conversion hub path)"
     );
+    private final MediaConverter mp4MovToM4aRemuxConverter = new Mp4MovToM4aRemuxConverter();
     private final MediaConverter audioToImageConverter = new UnsupportedRouteConverter(
             "audio->image (album cover) conversion is not implemented yet (planned conversion hub path)"
     );
     private final MediaConverter videoToVideoConverter = new UnsupportedRouteConverter(
             "video->video conversion is not implemented yet (planned conversion hub path)"
     );
-    private final MediaConverter audioToAudioTranscodeConverter = new UnsupportedRouteConverter(
-            "audio->audio transcoding is not implemented yet (planned conversion hub path)"
-    );
+    private final MediaConverter audioToAudioTranscodeConverter = new JavaSoundAudioTranscodeConverter();
     private final MediaConverter imageToImageTranscodeConverter = new ImageTranscodeConverter();
 
     @Override
@@ -29,7 +28,7 @@ public final class DefaultConversionHub implements ConversionHub {
 
         ConversionRoute route = ConversionRouteResolver.resolve(request.sourceMediaType(), request.targetMediaType());
         return switch (route) {
-            case VIDEO_TO_AUDIO -> videoToAudioConverter.convert(request);
+            case VIDEO_TO_AUDIO -> convertVideoToAudio(request);
             case AUDIO_TO_IMAGE -> audioToImageConverter.convert(request);
             case VIDEO_TO_VIDEO -> videoToVideoConverter.convert(request);
             case AUDIO_TO_AUDIO -> {
@@ -45,6 +44,15 @@ public final class DefaultConversionHub implements ConversionHub {
                     "Unsupported conversion route: " + request.sourceMediaType() + " -> " + request.targetMediaType()
             );
         };
+    }
+
+    private ConversionResult convertVideoToAudio(ConversionRequest request) throws CodecMediaException {
+        boolean mp4MovToM4a = "m4a".equals(request.targetExtension())
+                && ("mp4".equals(request.sourceExtension()) || "mov".equals(request.sourceExtension()));
+        if (mp4MovToM4a) {
+            return mp4MovToM4aRemuxConverter.convert(request);
+        }
+        return videoToAudioConverter.convert(request);
     }
 }
 

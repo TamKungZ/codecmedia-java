@@ -6,7 +6,7 @@
 [![Java](https://img.shields.io/badge/Java-17%2B-ED8B00?logo=openjdk&logoColor=white)](https://openjdk.org/)
 [![Maven](https://img.shields.io/badge/Maven-3.9%2B-C71A36?logo=apachemaven&logoColor=white)](https://maven.apache.org/)
 
-CodecMedia is a Java library for media probing, validation, metadata persistence (embedded LIST/INFO for WAV and sidecar for non-WAV), audio extraction, playback workflow handling, and conversion routing.
+CodecMedia is a Java library for media probing, validation, metadata persistence (embedded WAV/AIFF/MP3 where supported with sidecar fallback for other formats), audio extraction, playback workflow handling, and conversion routing.
 
 
 <p align="center">
@@ -39,18 +39,18 @@ CodecMedia is a Java library for media probing, validation, metadata persistence
   - WebM (EBML container parsing)
 - Validation with size limits and strict parser checks for MP3/OGG/WAV/AIFF/FLAC/PNG/JPEG/WebP/BMP/TIFF/HEIC/HEIF/AVIF/MOV/MP4/WebM
 - MOV/MP4/WebM probe tags now include richer video metadata when present (for example `displayAspectRatio`, `bitDepth`, `videoBitrateKbps`, `audioBitrateKbps`)
-- Metadata read/write with embedded WAV LIST/INFO support and sidecar persistence (`.codecmedia.properties`) for non-WAV inputs
+- Metadata read/write with embedded WAV LIST/INFO, AIFF text chunks (`NAME`/`AUTH`/`(c) `/`ANNO`), and MP3 ID3v1 support, plus sidecar persistence (`.codecmedia.properties`) for non-embedded fallback/compatibility paths
 - In-Java extraction and conversion file operations
 - Image-to-image conversion in Java for: `png`, `jpg`/`jpeg`, `webp`, `bmp`, `tif`/`tiff`, `heic`/`heif`/`avif`
 - Playback API with dry-run support, internal Java sampled backend for WAV/AIFF family, and optional desktop-open fallback
-- Conversion hub routing with explicit unsupported routes and a real `wav <-> pcm` path (`WAV -> PCM` data-chunk extraction, `PCM -> WAV` wrapping)
+- Conversion hub routing with explicit unsupported routes, a real `wav <-> pcm` path (`WAV -> PCM` data-chunk extraction, `PCM -> WAV` wrapping), JDK Java Sound audio targets (`wav`/`aiff`/`au`), and MP4/MOV audio-track remux to `m4a` when codec-compatible
 
 ## API Behavior Summary
 
 - `get(input)`: alias of `probe(input)` for convenience.
 - `probe(input)`: detects media/container characteristics and returns technical stream info for supported formats.
-- `readMetadata(input)`: returns derived probe metadata plus embedded LIST/INFO tags for WAV, and sidecar entries for non-WAV when present.
-- `writeMetadata(input, metadata)`: validates and writes embedded LIST/INFO tags for WAV, and writes a sidecar properties file next to non-WAV inputs.
+- `readMetadata(input)`: returns derived probe metadata plus embedded metadata where supported (WAV LIST/INFO, AIFF text chunks, MP3 ID3v1, OGG/FLAC comments), then merges sidecar entries as fallback when present.
+- `writeMetadata(input, metadata)`: validates and writes embedded metadata where supported (WAV LIST/INFO, AIFF text chunks, MP3 ID3v1); for embedded-capable formats, stale sidecar files are removed; sidecar remains for compatibility/non-embedded paths.
 - `extractAudio(input, outputDir, options)`: validates audio input and writes extracted output into `outputDir`.
 - `convert(input, output, options)`: performs routed conversion behavior and enforces `overwrite` handling.
 - `play(input, options)`: supports dry-run playback, routes WAV/AIFF-family playback through an internal Java sampled backend, and falls back to optional system default app launch.
@@ -60,8 +60,8 @@ CodecMedia is a Java library for media probing, validation, metadata persistence
 
 - Current probing focuses on **technical media info** (mime/type/streams/basic tags).
 - Probe routing now performs a lightweight header-prefix sniff before full decode to reduce unnecessary full-file reads for clearly unsupported/unknown inputs.
-- `readMetadata` supports embedded LIST/INFO for WAV plus sidecar metadata persistence for non-WAV inputs; it is **not** a full embedded tag extractor for other formats (for example ID3 album art/APIC).
-- Audio-to-audio conversion is not implemented yet for general real transcode cases (for example `mp3 -> ogg`).
+- `readMetadata` supports embedded metadata for WAV (LIST/INFO), AIFF text chunks, MP3 (ID3v1), and OGG/FLAC comments; it is **not** a full embedded tag extractor for advanced tag families (for example ID3v2 APIC/album art).
+- Audio-to-audio conversion is partially implemented with JDK Java Sound targets (`wav`/`aiff`/`au`); general compressed-target transcode cases (for example `mp3 -> ogg`) are still not implemented.
 - The currently implemented audio route is `wav <-> pcm`:
   - `wav -> pcm`: extracts raw PCM payload from WAV `data` chunk
   - `pcm -> wav`: wraps PCM into PCM WAV container

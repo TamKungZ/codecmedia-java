@@ -1,7 +1,10 @@
 package me.tamkungz.codecmedia.internal.audio.aiff;
 
+import java.util.Map;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
 import me.tamkungz.codecmedia.CodecMediaException;
@@ -39,6 +42,36 @@ class AiffParserTest {
 
         CodecMediaException ex = assertThrows(CodecMediaException.class, () -> AiffParser.parse(aifc));
         assertEquals("Unsupported AIFC compression type: ulaw", ex.getMessage());
+    }
+
+    @Test
+    void shouldReadAiffTextMetadataChunks() throws Exception {
+        byte[] base = createMinimalAiff(2, 44100, 16, 44100);
+        byte[] withMetadata = AiffParser.writeTextMetadata(base, Map.of(
+                "title", "AIFF Title",
+                "artist", "AIFF Artist",
+                "copyright", "(c) CodecMedia",
+                "comment", "AIFF Note"
+        ));
+
+        Map<String, String> metadata = AiffParser.readTextMetadata(withMetadata);
+        assertEquals("AIFF Title", metadata.get("title"));
+        assertEquals("AIFF Artist", metadata.get("artist"));
+        assertEquals("(c) CodecMedia", metadata.get("copyright"));
+        assertEquals("AIFF Note", metadata.get("comment"));
+    }
+
+    @Test
+    void shouldWriteAiffTextMetadataWithoutBreakingProbe() throws Exception {
+        byte[] base = createMinimalAiff(2, 44100, 16, 44100);
+        byte[] withMetadata = AiffParser.writeTextMetadata(base, Map.of(
+                "title", "After Write"
+        ));
+
+        AiffProbeInfo info = AiffParser.parse(withMetadata);
+        assertEquals(2, info.channels());
+        assertEquals(44100, info.sampleRate());
+        assertTrue(withMetadata.length >= base.length);
     }
 
     private static byte[] createMinimalAiff(int channels, int sampleRate, int bitsPerSample, int frames) {

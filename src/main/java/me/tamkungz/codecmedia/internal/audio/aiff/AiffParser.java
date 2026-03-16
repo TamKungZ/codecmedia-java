@@ -1,5 +1,12 @@
 package me.tamkungz.codecmedia.internal.audio.aiff;
 
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
 import me.tamkungz.codecmedia.CodecMediaException;
 import me.tamkungz.codecmedia.internal.audio.BitrateMode;
 
@@ -7,6 +14,13 @@ public final class AiffParser {
 
     private static final String AIFC_COMPRESSION_NONE = "NONE";
     private static final String AIFC_COMPRESSION_SOWT = "sowt";
+    private static final Map<String, String> TEXT_CHUNK_TO_METADATA = Map.of(
+            "NAME", "title",
+            "AUTH", "artist",
+            "(c) ", "copyright",
+            "ANNO", "comment"
+    );
+    private static final String[] METADATA_WRITE_ORDER = {"title", "artist", "copyright", "comment"};
 
     private AiffParser() {
     }
@@ -91,6 +105,120 @@ public final class AiffParser {
                 && (bytes[11] == 'F' || bytes[11] == 'C');
     }
 
+    public static Map<String, String> readTextMetadata(byte[] bytes) throws CodecMediaException {
+        if (!isLikelyAiff(bytes)) {
+            throw new CodecMediaException("Not an AIFF file");
+        }
+
+        Map<String, String> out = new LinkedHashMap<>();
+        int offset = 12;
+        while (offset + 8 <= bytes.length) {
+            String chunkId = readAscii(bytes, offset, 4);
+            int chunkSize = readBeInt(bytes, offset + 4);
+            if (chunkSize < 0) {
+                throw new CodecMediaException("Invalid AIFF chunk size: " + chunkSize);
+            }
+
+            int chunkDataStart = offset + 8;
+            long chunkDataEndLong = (long) chunkDataStart + chunkSize;
+            if (chunkDataEndLong < chunkDataStart || chunkDataEndLong > bytes.length) {
+                throw new CodecMediaException("AIFF chunk exceeds file bounds: " + chunkId);
+            }
+
+            String key = TEXT_CHUNK_TO_METADATA.get(chunkId);
+            if (key != null) {
+                int chunkDataEnd = (int) chunkDataEndLong;
+                while (chunkDataEnd > chunkDataStart
+                        && (bytes[chunkDataEnd - 1] == 0 || bytes[chunkDataEnd - 1] == ' ' || bytes[chunkDataEnd - 1] == '\n' || bytes[chunkDataEnd - 1] == '\r')) {
+                    chunkDataEnd--;
+                }
+                String value = new String(bytes, chunkDataStart, chunkDataEnd - chunkDataStart, StandardCharsets.UTF_8).trim();
+                if (!value.isEmpty()) {
+                    out.put(key, value);
+                }
+            }
+
+            int padded = (chunkSize & 1) == 0 ? chunkSize : chunkSize + 1;
+            long nextOffsetLong = (long) chunkDataStart + padded;
+            if (nextOffsetLong < chunkDataStart || nextOffsetLong > bytes.length || nextOffsetLong > Integer.MAX_VALUE) {
+                throw new CodecMediaException("AIFF chunk exceeds file bounds: " + chunkId);
+            }
+            offset = (int) nextOffsetLong;
+        }
+        return out;
+    }
+
+    public static byte[] writeTextMetadata(byte[] bytes, Map<String, String> metadataEntries) throws CodecMediaException {
+        if (!isLikelyAiff(bytes)) {
+            throw new CodecMediaException("Not an AIFF file");
+        }
+
+        List<byte[]> keptChunks = new ArrayList<>();
+        int offset = 12;
+        while (offset + 8 <= bytes.length) {
+            String chunkId = readAscii(bytes, offset, 4);
+            int chunkSize = readBeInt(bytes, offset + 4);
+            if (chunkSize < 0) {
+                throw new CodecMediaException("Invalid AIFF chunk size: " + chunkSize);
+            }
+
+            int chunkDataStart = offset + 8;
+            long chunkDataEndLong = (long) chunkDataStart + chunkSize;
+            if (chunkDataEndLong < chunkDataStart || chunkDataEndLong > bytes.length) {
+                throw new CodecMediaException("AIFF chunk exceeds file bounds: " + chunkId);
+            }
+
+            int padded = (chunkSize & 1) == 0 ? chunkSize : chunkSize + 1;
+            long nextOffsetLong = (long) chunkDataStart + padded;
+            if (nextOffsetLong < chunkDataStart || nextOffsetLong > bytes.length || nextOffsetLong > Integer.MAX_VALUE) {
+                throw new CodecMediaException("AIFF chunk exceeds file bounds: " + chunkId);
+            }
+
+            if (!isManagedTextChunk(chunkId)) {
+                int len = (int) (nextOffsetLong - offset);
+                byte[] rawChunk = new byte[len];
+                System.arraycopy(bytes, offset, rawChunk, 0, len);
+                keptChunks.add(rawChunk);
+            }
+            offset = (int) nextOffsetLong;
+        }
+
+        List<byte[]> textChunks = buildTextChunks(metadataEntries);
+
+        long total = 12L;
+        for (byte[] chunk : keptChunks) {
+            total += chunk.length;
+        }
+        for (byte[] chunk : textChunks) {
+            total += chunk.length;
+        }
+        if (total > Integer.MAX_VALUE) {
+            throw new CodecMediaException("AIFF file is too large after metadata write");
+        }
+
+        byte[] out = new byte[(int) total];
+        out[0] = 'F';
+        out[1] = 'O';
+        out[2] = 'R';
+        out[3] = 'M';
+        writeBeInt(out, 4, (int) (total - 8));
+        out[8] = 'A';
+        out[9] = 'I';
+        out[10] = 'F';
+        out[11] = bytes[11];
+
+        int outOffset = 12;
+        for (byte[] chunk : keptChunks) {
+            System.arraycopy(chunk, 0, out, outOffset, chunk.length);
+            outOffset += chunk.length;
+        }
+        for (byte[] chunk : textChunks) {
+            System.arraycopy(chunk, 0, out, outOffset, chunk.length);
+            outOffset += chunk.length;
+        }
+        return out;
+    }
+
     private static int decodeExtended80ToIntHz(byte[] bytes, int offset) throws CodecMediaException {
         if (offset + 10 > bytes.length) {
             throw new CodecMediaException("Unexpected end of AIFF data");
@@ -124,7 +252,55 @@ public final class AiffParser {
         if (offset + len > bytes.length) {
             throw new CodecMediaException("Unexpected end of AIFF data");
         }
-        return new String(bytes, offset, len, java.nio.charset.StandardCharsets.US_ASCII);
+        return new String(bytes, offset, len, StandardCharsets.US_ASCII);
+    }
+
+    private static boolean isManagedTextChunk(String chunkId) {
+        return TEXT_CHUNK_TO_METADATA.containsKey(chunkId);
+    }
+
+    private static List<byte[]> buildTextChunks(Map<String, String> metadataEntries) throws CodecMediaException {
+        List<byte[]> chunks = new ArrayList<>();
+        if (metadataEntries == null || metadataEntries.isEmpty()) {
+            return chunks;
+        }
+
+        for (String metadataKey : METADATA_WRITE_ORDER) {
+            String value = metadataEntries.get(metadataKey);
+            if (value == null || value.isBlank()) {
+                continue;
+            }
+
+            String chunkId = metadataToChunkId(metadataKey);
+            if (chunkId == null) {
+                continue;
+            }
+
+            byte[] data = value.getBytes(StandardCharsets.UTF_8);
+            if (data.length > Integer.MAX_VALUE - 8) {
+                throw new CodecMediaException("AIFF metadata entry too large: " + metadataKey);
+            }
+
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            out.writeBytes(chunkId.getBytes(StandardCharsets.US_ASCII));
+            writeBeInt(out, data.length);
+            out.writeBytes(data);
+            if ((data.length & 1) != 0) {
+                out.write(0);
+            }
+            chunks.add(out.toByteArray());
+        }
+
+        return chunks;
+    }
+
+    private static String metadataToChunkId(String metadataKey) {
+        for (Map.Entry<String, String> entry : TEXT_CHUNK_TO_METADATA.entrySet()) {
+            if (entry.getValue().equals(metadataKey)) {
+                return entry.getKey();
+            }
+        }
+        return null;
     }
 
     private static int readBeShort(byte[] bytes, int offset) throws CodecMediaException {
@@ -146,6 +322,20 @@ public final class AiffParser {
 
     private static long readBeUInt32(byte[] bytes, int offset) throws CodecMediaException {
         return readBeInt(bytes, offset) & 0xFFFFFFFFL;
+    }
+
+    private static void writeBeInt(byte[] out, int offset, int value) {
+        out[offset] = (byte) ((value >>> 24) & 0xFF);
+        out[offset + 1] = (byte) ((value >>> 16) & 0xFF);
+        out[offset + 2] = (byte) ((value >>> 8) & 0xFF);
+        out[offset + 3] = (byte) (value & 0xFF);
+    }
+
+    private static void writeBeInt(ByteArrayOutputStream out, int value) {
+        out.write((value >>> 24) & 0xFF);
+        out.write((value >>> 16) & 0xFF);
+        out.write((value >>> 8) & 0xFF);
+        out.write(value & 0xFF);
     }
 }
 

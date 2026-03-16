@@ -1,5 +1,11 @@
 package me.tamkungz.codecmedia.internal.audio.flac;
 
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Locale;
+import java.util.Map;
+
 import me.tamkungz.codecmedia.CodecMediaException;
 import me.tamkungz.codecmedia.internal.audio.BitrateMode;
 
@@ -82,6 +88,90 @@ public final class FlacParser {
                 && bytes[3] == 'C';
     }
 
+    public static Map<String, String> readVorbisCommentMetadata(byte[] bytes) throws CodecMediaException {
+        if (!isLikelyFlac(bytes)) {
+            throw new CodecMediaException("Not a FLAC file");
+        }
+
+        int offset = 4;
+        while (offset + 4 <= bytes.length) {
+            int header = bytes[offset] & 0xFF;
+            boolean last = (header & 0x80) != 0;
+            int blockType = header & 0x7F;
+            int length = ((bytes[offset + 1] & 0xFF) << 16)
+                    | ((bytes[offset + 2] & 0xFF) << 8)
+                    | (bytes[offset + 3] & 0xFF);
+            offset += 4;
+
+            if (offset + length > bytes.length) {
+                throw new CodecMediaException("Invalid FLAC metadata block length");
+            }
+
+            if (blockType == 4) {
+                return parseVorbisCommentBlock(bytes, offset, length);
+            }
+
+            offset += length;
+            if (last) {
+                break;
+            }
+        }
+        return Map.of();
+    }
+
+    private static Map<String, String> parseVorbisCommentBlock(byte[] bytes, int offset, int length) {
+        int end = offset + length;
+        int pos = offset;
+
+        int vendorLen = readLeIntAt(bytes, pos, end);
+        if (vendorLen < 0) {
+            return Map.of();
+        }
+        pos += 4;
+        if (pos + vendorLen > end) {
+            return Map.of();
+        }
+        pos += vendorLen;
+
+        int commentCount = readLeIntAt(bytes, pos, end);
+        if (commentCount < 0) {
+            return Map.of();
+        }
+        pos += 4;
+
+        Map<String, String> raw = new HashMap<>();
+        Map<String, String> out = new LinkedHashMap<>();
+        for (int i = 0; i < commentCount; i++) {
+            int commentLen = readLeIntAt(bytes, pos, end);
+            if (commentLen < 0) {
+                return Map.of();
+            }
+            pos += 4;
+            if (pos + commentLen > end) {
+                return Map.of();
+            }
+
+            String comment = new String(bytes, pos, commentLen, StandardCharsets.UTF_8);
+            int eq = comment.indexOf('=');
+            if (eq > 0) {
+                String key = comment.substring(0, eq).trim().toUpperCase(Locale.ROOT);
+                String value = comment.substring(eq + 1).trim();
+                if (!value.isEmpty()) {
+                    raw.putIfAbsent(key, value);
+                }
+            }
+            pos += commentLen;
+        }
+
+        putIfPresent(out, "title", raw, "TITLE");
+        putIfPresent(out, "artist", raw, "ARTIST");
+        putIfPresent(out, "album", raw, "ALBUM");
+        putIfPresent(out, "comment", raw, "COMMENT");
+        putIfPresent(out, "genre", raw, "GENRE");
+        putIfPresent(out, "date", raw, "DATE", "YEAR");
+        return out;
+    }
+
     private static long readUInt64BE(byte[] bytes, int offset) throws CodecMediaException {
         if (offset + 8 > bytes.length) {
             throw new CodecMediaException("Unexpected end of FLAC data");
@@ -94,6 +184,30 @@ public final class FlacParser {
                 | ((long) (bytes[offset + 5] & 0xFF) << 16)
                 | ((long) (bytes[offset + 6] & 0xFF) << 8)
                 | ((long) (bytes[offset + 7] & 0xFF));
+    }
+
+    private static int readLeIntAt(byte[] bytes, int offset, int endExclusive) {
+        if (offset < 0 || offset + 4 > endExclusive || offset + 4 > bytes.length) {
+            return -1;
+        }
+        long value = (bytes[offset] & 0xFFL)
+                | ((bytes[offset + 1] & 0xFFL) << 8)
+                | ((bytes[offset + 2] & 0xFFL) << 16)
+                | ((bytes[offset + 3] & 0xFFL) << 24);
+        if (value > Integer.MAX_VALUE) {
+            return -1;
+        }
+        return (int) value;
+    }
+
+    private static void putIfPresent(Map<String, String> target, String targetKey, Map<String, String> source, String... sourceKeys) {
+        for (String sourceKey : sourceKeys) {
+            String value = source.get(sourceKey);
+            if (value != null && !value.isBlank()) {
+                target.putIfAbsent(targetKey, value);
+                return;
+            }
+        }
     }
 }
 

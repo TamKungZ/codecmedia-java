@@ -1,6 +1,11 @@
 package me.tamkungz.codecmedia.internal.audio.ogg;
 
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 import me.tamkungz.codecmedia.CodecMediaException;
@@ -101,6 +106,44 @@ public final class OggParser {
         };
 
         return new OggProbeInfo(ident.codec(), ident.sampleRate(), ident.channels(), bitrateKbps, mode, durationMillis);
+    }
+
+    public static Map<String, String> readCommentMetadata(byte[] data) throws CodecMediaException {
+        if (data == null || data.length < 27) {
+            throw new CodecMediaException("Invalid OGG data: too small");
+        }
+
+        OggPageHeader firstPage = parsePageHeader(data, 0);
+        if (firstPage == null) {
+            throw new CodecMediaException("Invalid OGG stream: missing OggS header");
+        }
+
+        int identOffset = firstPage.headerSize();
+        int firstPayloadSize = firstPage.payloadSize();
+        if (identOffset + firstPayloadSize > data.length || firstPayloadSize <= 0) {
+            throw new CodecMediaException("Invalid OGG stream: incomplete first packet payload");
+        }
+        AudioIdent ident = parseIdentificationPacket(data, identOffset, firstPayloadSize);
+
+        int offset = 0;
+        while (offset + 27 <= data.length) {
+            OggPageHeader page = parsePageHeader(data, offset);
+            if (page == null) {
+                break;
+            }
+            int payloadOffset = offset + page.headerSize();
+            int payloadSize = page.payloadSize();
+            if (payloadOffset + payloadSize > data.length) {
+                break;
+            }
+
+            Map<String, String> comments = parseCodecComments(data, payloadOffset, payloadSize, ident.codec());
+            if (!comments.isEmpty()) {
+                return comments;
+            }
+            offset += page.totalPageSize();
+        }
+        return Map.of();
     }
 
     private static BitrateMode detectVorbisBitrateMode(
@@ -220,6 +263,113 @@ public final class OggParser {
             return parseOpusCommentSignal(data, offset, payloadSize);
         }
         return false;
+    }
+
+    private static Map<String, String> parseCodecComments(byte[] data, int offset, int payloadSize, String codec) {
+        if (offset < 0 || payloadSize <= 0 || offset + payloadSize > data.length) {
+            return Map.of();
+        }
+        return switch (codec) {
+            case "vorbis" -> parseVorbisComments(data, offset, payloadSize);
+            case "opus" -> parseOpusComments(data, offset, payloadSize);
+            default -> Map.of();
+        };
+    }
+
+    private static Map<String, String> parseVorbisComments(byte[] data, int offset, int payloadSize) {
+        if (payloadSize < 11) {
+            return Map.of();
+        }
+        if (data[offset] != 0x03
+                || data[offset + 1] != 'v'
+                || data[offset + 2] != 'o'
+                || data[offset + 3] != 'r'
+                || data[offset + 4] != 'b'
+                || data[offset + 5] != 'i'
+                || data[offset + 6] != 's') {
+            return Map.of();
+        }
+        return parseCommentMap(data, offset + 7, offset + payloadSize, true);
+    }
+
+    private static Map<String, String> parseOpusComments(byte[] data, int offset, int payloadSize) {
+        if (payloadSize < 12) {
+            return Map.of();
+        }
+        if (data[offset] != 'O'
+                || data[offset + 1] != 'p'
+                || data[offset + 2] != 'u'
+                || data[offset + 3] != 's'
+                || data[offset + 4] != 'T'
+                || data[offset + 5] != 'a'
+                || data[offset + 6] != 'g'
+                || data[offset + 7] != 's') {
+            return Map.of();
+        }
+        return parseCommentMap(data, offset + 8, offset + payloadSize, false);
+    }
+
+    private static Map<String, String> parseCommentMap(byte[] data, int pos, int end, boolean vorbis) {
+        int vendorLen = readU32LEAt(data, pos, end);
+        if (vendorLen < 0) {
+            return Map.of();
+        }
+        pos += 4;
+        if (pos + vendorLen > end) {
+            return Map.of();
+        }
+        pos += vendorLen;
+
+        int commentCount = readU32LEAt(data, pos, end);
+        if (commentCount < 0) {
+            return Map.of();
+        }
+        pos += 4;
+
+        Map<String, String> canonical = new LinkedHashMap<>();
+        Map<String, String> raw = new HashMap<>();
+        for (int i = 0; i < commentCount; i++) {
+            int commentLen = readU32LEAt(data, pos, end);
+            if (commentLen < 0) {
+                return Map.of();
+            }
+            pos += 4;
+            if (pos + commentLen > end) {
+                return Map.of();
+            }
+
+            String text = new String(data, pos, commentLen, StandardCharsets.UTF_8);
+            int eq = text.indexOf('=');
+            if (eq > 0) {
+                String key = text.substring(0, eq).trim().toUpperCase(Locale.ROOT);
+                String value = text.substring(eq + 1).trim();
+                if (!value.isEmpty()) {
+                    raw.putIfAbsent(key, value);
+                }
+            }
+            pos += commentLen;
+        }
+
+        putIfPresent(canonical, "title", raw, "TITLE");
+        putIfPresent(canonical, "artist", raw, "ARTIST");
+        putIfPresent(canonical, "album", raw, "ALBUM");
+        putIfPresent(canonical, "comment", raw, "COMMENT");
+        putIfPresent(canonical, "genre", raw, "GENRE");
+        putIfPresent(canonical, "date", raw, "DATE", "YEAR");
+        if (!vorbis) {
+            putIfPresent(canonical, "encoder", raw, "ENCODER", "ENCODER_OPTIONS");
+        }
+        return canonical;
+    }
+
+    private static void putIfPresent(Map<String, String> target, String targetKey, Map<String, String> source, String... sourceKeys) {
+        for (String sourceKey : sourceKeys) {
+            String value = source.get(sourceKey);
+            if (value != null && !value.isBlank()) {
+                target.putIfAbsent(targetKey, value);
+                return;
+            }
+        }
     }
 
     private static boolean parseVorbisCommentSignal(byte[] data, int offset, int payloadSize) {

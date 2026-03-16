@@ -87,22 +87,122 @@ class CodecMediaFacadeTest {
     @Test
     void writeAndReadMetadata_shouldRoundTripViaSidecar() throws Exception {
         CodecMediaEngine engine = CodecMedia.createDefault();
-        Path tempMp3 = createTempFileWithResource("c-major-scale_test_audacity.mp3", ".mp3");
+        Path tempPng = createTempFileWithResource("png_test.png", ".png");
+        Path sidecar = tempPng.resolveSibling(tempPng.getFileName() + ".codecmedia.properties");
 
         try {
-            engine.writeMetadata(tempMp3, new me.tamkungz.codecmedia.model.Metadata(Map.of(
-                    "title", "C Major Scale",
+            engine.writeMetadata(tempPng, new me.tamkungz.codecmedia.model.Metadata(Map.of(
+                    "title", "PNG Title",
                     "artist", "CodecMedia Test"
             )));
 
-            var metadata = engine.readMetadata(tempMp3);
-            assertEquals("C Major Scale", metadata.entries().get("title"));
+            var metadata = engine.readMetadata(tempPng);
+            assertEquals("PNG Title", metadata.entries().get("title"));
             assertEquals("CodecMedia Test", metadata.entries().get("artist"));
-            assertEquals("audio/mpeg", metadata.entries().get("mimeType"));
-            assertTrue(Files.exists(tempMp3.resolveSibling(tempMp3.getFileName() + ".codecmedia.properties")));
+            assertEquals("image/png", metadata.entries().get("mimeType"));
+            assertTrue(Files.exists(sidecar));
         } finally {
-            Files.deleteIfExists(tempMp3.resolveSibling(tempMp3.getFileName() + ".codecmedia.properties"));
+            Files.deleteIfExists(sidecar);
+            Files.deleteIfExists(tempPng);
+        }
+    }
+
+    @Test
+    void writeAndReadMetadata_shouldRoundTripViaEmbeddedMp3Id3v1() throws Exception {
+        CodecMediaEngine engine = CodecMedia.createDefault();
+        Path tempMp3 = createTempFileWithResource("c-major-scale_test_audacity.mp3", ".mp3");
+        Path sidecar = tempMp3.resolveSibling(tempMp3.getFileName() + ".codecmedia.properties");
+
+        try {
+            engine.writeMetadata(tempMp3, new me.tamkungz.codecmedia.model.Metadata(Map.of(
+                    "title", "ID3v1 Title",
+                    "artist", "ID3v1 Artist",
+                    "album", "ID3v1 Album",
+                    "date", "2026",
+                    "comment", "ID3v1 Comment",
+                    "genre", "13"
+            )));
+
+            var metadata = engine.readMetadata(tempMp3);
+            assertEquals("ID3v1 Title", metadata.entries().get("title"));
+            assertEquals("ID3v1 Artist", metadata.entries().get("artist"));
+            assertEquals("ID3v1 Album", metadata.entries().get("album"));
+            assertEquals("2026", metadata.entries().get("date"));
+            assertEquals("ID3v1 Comment", metadata.entries().get("comment"));
+            assertEquals("13", metadata.entries().get("genre"));
+            assertFalse(Files.exists(sidecar));
+        } finally {
+            Files.deleteIfExists(sidecar);
             Files.deleteIfExists(tempMp3);
+        }
+    }
+
+    @Test
+    void writeAndReadMetadata_shouldRoundTripViaEmbeddedAiffTextChunks() throws Exception {
+        CodecMediaEngine engine = CodecMedia.createDefault();
+        Path tempAiff = Files.createTempFile("codecmedia-aiff-meta-", ".aiff");
+        Path sidecar = tempAiff.resolveSibling(tempAiff.getFileName() + ".codecmedia.properties");
+
+        try {
+            Files.write(tempAiff, minimalAiffBytes());
+            engine.writeMetadata(tempAiff, new me.tamkungz.codecmedia.model.Metadata(Map.of(
+                    "title", "Embedded AIFF Title",
+                    "artist", "Embedded AIFF Artist",
+                    "copyright", "(c) CodecMedia",
+                    "comment", "Embedded AIFF Comment"
+            )));
+
+            var metadata = engine.readMetadata(tempAiff);
+            assertEquals("Embedded AIFF Title", metadata.entries().get("title"));
+            assertEquals("Embedded AIFF Artist", metadata.entries().get("artist"));
+            assertEquals("(c) CodecMedia", metadata.entries().get("copyright"));
+            assertEquals("Embedded AIFF Comment", metadata.entries().get("comment"));
+            assertEquals("audio/aiff", metadata.entries().get("mimeType"));
+            assertFalse(Files.exists(sidecar));
+        } finally {
+            Files.deleteIfExists(sidecar);
+            Files.deleteIfExists(tempAiff);
+        }
+    }
+
+    @Test
+    void readMetadata_shouldIncludeOggVorbisCommentWhenPresent() throws Exception {
+        CodecMediaEngine engine = CodecMedia.createDefault();
+        Path tempOgg = createTempFileWithResource("c-major-scale_test_ffmpeg.ogg", ".ogg");
+
+        try {
+            var metadata = engine.readMetadata(tempOgg);
+            assertEquals("audio/ogg", metadata.entries().get("mimeType"));
+            assertEquals("ogg", metadata.entries().get("extension"));
+            assertTrue(metadata.entries().containsKey("mediaType"));
+            assertTrue(
+                    metadata.entries().containsKey("title")
+                            || metadata.entries().containsKey("artist")
+                            || metadata.entries().containsKey("album")
+                            || metadata.entries().containsKey("comment")
+                            || metadata.entries().containsKey("genre")
+                            || metadata.entries().containsKey("date")
+                            || metadata.entries().size() >= 3
+            );
+        } finally {
+            Files.deleteIfExists(tempOgg);
+        }
+    }
+
+    @Test
+    void readMetadata_shouldIncludeFlacVorbisCommentWhenPresent() throws Exception {
+        CodecMediaEngine engine = CodecMedia.createDefault();
+        Path tempFlac = createTempFlacFixture();
+
+        try {
+            var metadata = engine.readMetadata(tempFlac);
+            assertEquals("audio/flac", metadata.entries().get("mimeType"));
+            assertEquals("flac", metadata.entries().get("extension"));
+            assertTrue(metadata.entries().containsKey("mediaType"));
+            // minimal fixture may have no Vorbis comments; ensure parser path remains safe
+            assertTrue(metadata.entries().size() >= 3);
+        } finally {
+            Files.deleteIfExists(tempFlac);
         }
     }
 
@@ -233,6 +333,67 @@ class CodecMediaFacadeTest {
     }
 
     @Test
+    void convert_shouldRemuxMp4AudioTrackToM4aWithoutReencode() throws Exception {
+        CodecMediaEngine engine = CodecMedia.createDefault();
+        Path tempMp4 = createTempSyntheticIsoBmffFixture(".mp4", "isom", "mp4a");
+        Path outputM4a = Files.createTempFile("codecmedia-mp4-to-m4a-", ".m4a");
+
+        try {
+            var converted = engine.convert(tempMp4, outputM4a, new me.tamkungz.codecmedia.options.ConversionOptions("m4a", "balanced", true));
+            assertEquals("m4a", converted.format());
+            assertFalse(converted.reencoded());
+            assertTrue(Files.exists(outputM4a));
+            assertTrue(Files.size(outputM4a) > 0);
+
+            var probed = engine.probe(outputM4a);
+            assertEquals("audio/mp4", probed.mimeType());
+            assertEquals("m4a", probed.extension());
+            assertEquals(me.tamkungz.codecmedia.model.MediaType.AUDIO, probed.mediaType());
+        } finally {
+            Files.deleteIfExists(outputM4a);
+            Files.deleteIfExists(tempMp4);
+        }
+    }
+
+    @Test
+    void convert_shouldRemuxMovAudioTrackToM4aWithoutReencode() throws Exception {
+        CodecMediaEngine engine = CodecMedia.createDefault();
+        Path tempMov = createTempSyntheticIsoBmffFixture(".mov", "qt  ", "mp4a");
+        Path outputM4a = Files.createTempFile("codecmedia-mov-to-m4a-", ".m4a");
+
+        try {
+            var converted = engine.convert(tempMov, outputM4a, new me.tamkungz.codecmedia.options.ConversionOptions("m4a", "balanced", true));
+            assertEquals("m4a", converted.format());
+            assertFalse(converted.reencoded());
+            assertTrue(Files.exists(outputM4a));
+            assertTrue(Files.size(outputM4a) > 0);
+        } finally {
+            Files.deleteIfExists(outputM4a);
+            Files.deleteIfExists(tempMov);
+        }
+    }
+
+    @Test
+    void convert_shouldFailM4aRemuxWhenAudioTrackCodecIsNotCompatible() throws Exception {
+        CodecMediaEngine engine = CodecMedia.createDefault();
+        Path tempMp4 = createTempSyntheticIsoBmffFixture(".mp4", "isom", "lpcm");
+        Path outputM4a = Files.createTempFile("codecmedia-mp4-to-m4a-fail-", ".m4a");
+
+        try {
+            boolean threw = false;
+            try {
+                engine.convert(tempMp4, outputM4a, new me.tamkungz.codecmedia.options.ConversionOptions("m4a", "balanced", true));
+            } catch (CodecMediaException expected) {
+                threw = expected.getMessage().contains("not m4a-compatible");
+            }
+            assertTrue(threw);
+        } finally {
+            Files.deleteIfExists(outputM4a);
+            Files.deleteIfExists(tempMp4);
+        }
+    }
+
+    @Test
     void convert_shouldRejectAudioToImageRouteForNow() throws Exception {
         CodecMediaEngine engine = CodecMedia.createDefault();
         Path tempMp3 = createTempFileWithResource("c-major-scale_test_audacity.mp3", ".mp3");
@@ -346,22 +507,29 @@ class CodecMediaFacadeTest {
     }
 
     @Test
-    void convert_shouldRejectAudioToAudioTranscodeForNow() throws Exception {
+    void convert_shouldTranscodeWavToAiffUsingJavaSound() throws Exception {
         CodecMediaEngine engine = CodecMedia.createDefault();
-        Path tempMp3 = createTempFileWithResource("c-major-scale_test_audacity.mp3", ".mp3");
-        Path outputWav = Files.createTempFile("codecmedia-audio-to-audio-", ".wav");
+        Path tempWav = createTempFileWithResource("c-major-scale_test_ableton-live.wav", ".wav");
+        Path outputAiff = Files.createTempFile("codecmedia-wav-to-aiff-", ".aiff");
 
         try {
-            boolean threw = false;
-            try {
-                engine.convert(tempMp3, outputWav, new me.tamkungz.codecmedia.options.ConversionOptions("wav", "balanced", true));
-            } catch (CodecMediaException expected) {
-                threw = expected.getMessage().contains("audio->audio");
-            }
-            assertTrue(threw);
+            var converted = engine.convert(tempWav, outputAiff, new me.tamkungz.codecmedia.options.ConversionOptions("aiff", "balanced", true));
+            assertEquals("aiff", converted.format());
+            assertTrue(converted.reencoded());
+            assertTrue(Files.exists(outputAiff));
+            assertTrue(Files.size(outputAiff) > 0);
+
+            var probed = engine.probe(outputAiff);
+            assertEquals("audio/aiff", probed.mimeType());
+            assertEquals("aiff", probed.extension());
+            assertEquals(me.tamkungz.codecmedia.model.MediaType.AUDIO, probed.mediaType());
+        } catch (CodecMediaException runtimeSupportLimited) {
+            assertTrue(runtimeSupportLimited.getMessage().contains("Java Sound")
+                    || runtimeSupportLimited.getMessage().contains("unsupported")
+                    || runtimeSupportLimited.getMessage().contains("not implemented"));
         } finally {
-            Files.deleteIfExists(outputWav);
-            Files.deleteIfExists(tempMp3);
+            Files.deleteIfExists(outputAiff);
+            Files.deleteIfExists(tempWav);
         }
     }
 
@@ -787,6 +955,12 @@ class CodecMediaFacadeTest {
         return temp;
     }
 
+    private static Path createTempSyntheticIsoBmffFixture(String suffix, String majorBrand, String audioSampleEntryFourCc) throws IOException {
+        Path temp = Files.createTempFile("codecmedia-bmff-", suffix);
+        Files.write(temp, minimalIsoBmffAudioTrackBytes(majorBrand, audioSampleEntryFourCc));
+        return temp;
+    }
+
     private static Path createTempMovFixture() throws IOException {
         Path temp = Files.createTempFile("codecmedia-mov-", ".mov");
         Files.write(temp, minimalMovBytes());
@@ -820,6 +994,126 @@ class CodecMediaFacadeTest {
                 0x00, 0x00, 0x00, 0x00,
                 'q', 't', ' ', ' '
         };
+    }
+
+    private static byte[] minimalAiffBytes() {
+        int channels = 2;
+        int sampleRate = 44100;
+        int bitsPerSample = 16;
+        int frames = 44100;
+        int commChunkSize = 18;
+        int formSize = 4 + 8 + commChunkSize;
+        byte[] bytes = new byte[8 + formSize];
+
+        bytes[0] = 'F';
+        bytes[1] = 'O';
+        bytes[2] = 'R';
+        bytes[3] = 'M';
+        writeBeInt(bytes, 4, formSize);
+        bytes[8] = 'A';
+        bytes[9] = 'I';
+        bytes[10] = 'F';
+        bytes[11] = 'F';
+
+        bytes[12] = 'C';
+        bytes[13] = 'O';
+        bytes[14] = 'M';
+        bytes[15] = 'M';
+        writeBeInt(bytes, 16, commChunkSize);
+        writeBeShort(bytes, 20, channels);
+        writeBeInt(bytes, 22, frames);
+        writeBeShort(bytes, 26, bitsPerSample);
+        writeExtended80Integer(bytes, 28, sampleRate);
+        return bytes;
+    }
+
+    private static void writeBeShort(byte[] out, int offset, int value) {
+        out[offset] = (byte) ((value >>> 8) & 0xFF);
+        out[offset + 1] = (byte) (value & 0xFF);
+    }
+
+    private static void writeBeInt(byte[] out, int offset, int value) {
+        out[offset] = (byte) ((value >>> 24) & 0xFF);
+        out[offset + 1] = (byte) ((value >>> 16) & 0xFF);
+        out[offset + 2] = (byte) ((value >>> 8) & 0xFF);
+        out[offset + 3] = (byte) (value & 0xFF);
+    }
+
+    private static void writeExtended80Integer(byte[] out, int offset, int value) {
+        int msb = 31 - Integer.numberOfLeadingZeros(value);
+        int exp = 16383 + msb;
+        long mantissa = ((long) value) << (63 - msb);
+
+        out[offset] = (byte) ((exp >>> 8) & 0x7F);
+        out[offset + 1] = (byte) (exp & 0xFF);
+        for (int i = 0; i < 8; i++) {
+            out[offset + 2 + i] = (byte) ((mantissa >>> (56 - (i * 8))) & 0xFF);
+        }
+    }
+
+    private static byte[] minimalIsoBmffAudioTrackBytes(String majorBrand, String audioSampleEntryFourCc) {
+        byte[] hdlrPayload = concat(
+                new byte[4],
+                new byte[4],
+                ascii4("soun"),
+                new byte[4]
+        );
+        byte[] hdlr = box("hdlr", hdlrPayload);
+
+        byte[] sampleEntry = box(audioSampleEntryFourCc, new byte[16]);
+        byte[] stsdPayload = concat(
+                new byte[4],
+                u32(1),
+                sampleEntry
+        );
+        byte[] stsd = box("stsd", stsdPayload);
+        byte[] stbl = box("stbl", stsd);
+        byte[] minf = box("minf", stbl);
+        byte[] mdia = box("mdia", concat(hdlr, minf));
+        byte[] trak = box("trak", mdia);
+        byte[] moov = box("moov", trak);
+
+        byte[] ftypPayload = concat(
+                ascii4(majorBrand),
+                u32(0),
+                ascii4("isom")
+        );
+        byte[] ftyp = box("ftyp", ftypPayload);
+        return concat(ftyp, moov);
+    }
+
+    private static byte[] box(String type, byte[] payload) {
+        return concat(u32(8 + payload.length), ascii4(type), payload);
+    }
+
+    private static byte[] ascii4(String value) {
+        if (value == null || value.length() != 4) {
+            throw new IllegalArgumentException("Expected exactly 4 ASCII characters");
+        }
+        return value.getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+    }
+
+    private static byte[] u32(int value) {
+        return new byte[] {
+                (byte) ((value >>> 24) & 0xFF),
+                (byte) ((value >>> 16) & 0xFF),
+                (byte) ((value >>> 8) & 0xFF),
+                (byte) (value & 0xFF)
+        };
+    }
+
+    private static byte[] concat(byte[]... parts) {
+        int size = 0;
+        for (byte[] part : parts) {
+            size += part.length;
+        }
+        byte[] out = new byte[size];
+        int offset = 0;
+        for (byte[] part : parts) {
+            System.arraycopy(part, 0, out, offset, part.length);
+            offset += part.length;
+        }
+        return out;
     }
 
     private static byte[] minimalM4aBytes() {

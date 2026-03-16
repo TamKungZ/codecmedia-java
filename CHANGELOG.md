@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.5] - 2026-03-17
+
+### Added
+- Added MP3 embedded ID3v1 metadata reader/writer via [`Mp3Id3v1Tag`](src/main/java/me/tamkungz/codecmedia/internal/audio/mp3/Mp3Id3v1Tag.java) and integrated it into engine metadata read/write flow in [`StubCodecMediaEngine`](src/main/java/me/tamkungz/codecmedia/internal/StubCodecMediaEngine.java).
+- Added OGG Vorbis/Opus comment metadata reader via [`OggParser.readCommentMetadata()`](src/main/java/me/tamkungz/codecmedia/internal/audio/ogg/OggParser.java) and integrated it into [`StubCodecMediaEngine.readMetadata()`](src/main/java/me/tamkungz/codecmedia/internal/StubCodecMediaEngine.java).
+- Added FLAC Vorbis comment metadata reader via [`FlacParser.readVorbisCommentMetadata()`](src/main/java/me/tamkungz/codecmedia/internal/audio/flac/FlacParser.java) and integrated it into [`StubCodecMediaEngine.readMetadata()`](src/main/java/me/tamkungz/codecmedia/internal/StubCodecMediaEngine.java).
+- Added Java Sound audio transcoder [`JavaSoundAudioTranscodeConverter`](src/main/java/me/tamkungz/codecmedia/internal/convert/JavaSoundAudioTranscodeConverter.java) for JDK-only target formats (`wav`, `aiff`, `au`).
+- Added AIFF embedded text metadata read/write support (`NAME`, `AUTH`, `(c) `, `ANNO`) via [`AiffParser.readTextMetadata()`](src/main/java/me/tamkungz/codecmedia/internal/audio/aiff/AiffParser.java) and [`AiffParser.writeTextMetadata()`](src/main/java/me/tamkungz/codecmedia/internal/audio/aiff/AiffParser.java).
+- Added MP4/MOV to M4A audio-track remux route via [`Mp4MovToM4aRemuxConverter`](src/main/java/me/tamkungz/codecmedia/internal/convert/Mp4MovToM4aRemuxConverter.java) in the video-to-audio conversion hub path.
+
+### Changed
+- Updated audio-to-audio conversion routing in [`DefaultConversionHub`](src/main/java/me/tamkungz/codecmedia/internal/convert/DefaultConversionHub.java) to use Java Sound transcoding path (while preserving explicit WAV/PCM routing).
+- Expanded facade regression coverage in [`CodecMediaFacadeTest`](src/test/java/me/tamkungz/codecmedia/CodecMediaFacadeTest.java) for MP3 embedded metadata and OGG/FLAC metadata read paths.
+- Standardized metadata merge behavior in [`StubCodecMediaEngine.readMetadata()`](src/main/java/me/tamkungz/codecmedia/internal/StubCodecMediaEngine.java) to treat embedded metadata as canonical and sidecar values as fallback (`putIfAbsent` for non-core keys).
+- Updated metadata write behavior in [`StubCodecMediaEngine.writeMetadata()`](src/main/java/me/tamkungz/codecmedia/internal/StubCodecMediaEngine.java) so embedded-capable formats (`wav`, `mp3`, `aif`/`aiff`/`aifc`) write in-file metadata and remove stale sidecar files.
+- Expanded metadata regression coverage in [`CodecMediaFacadeTest`](src/test/java/me/tamkungz/codecmedia/CodecMediaFacadeTest.java) and parser-level AIFF coverage in [`AiffParserTest`](src/test/java/me/tamkungz/codecmedia/internal/audio/aiff/AiffParserTest.java).
+
+### Verified
+- Confirmed metadata and conversion/facade behavior with `mvn -Dtest=CodecMediaFacadeTest test`.
+- Confirmed AIFF embedded metadata parser and facade flows with `mvn -Dtest=AiffParserTest,CodecMediaFacadeTest test`.
+
 ## [1.1.4] - 2026-03-17
 
 ### Added
