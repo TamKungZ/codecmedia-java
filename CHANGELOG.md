@@ -5,21 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.4] - 2026-03-16
+## [1.1.4] - 2026-03-17
+
+### Added
+- Added WAV embedded metadata round-trip handling (RIFF `LIST/INFO`) in [`WavParser`](src/main/java/me/tamkungz/codecmedia/internal/audio/wav/WavParser.java) and engine metadata flow in [`StubCodecMediaEngine`](src/main/java/me/tamkungz/codecmedia/internal/StubCodecMediaEngine.java).
+- Added internal Java sampled playback route (`java-sampled`) for WAV/AIFF-family playback in [`StubCodecMediaEngine`](src/main/java/me/tamkungz/codecmedia/internal/StubCodecMediaEngine.java).
+- Added playback routing regression coverage in [`StubCodecMediaEnginePlaybackRoutingTest`](src/test/java/me/tamkungz/codecmedia/internal/StubCodecMediaEnginePlaybackRoutingTest.java).
 
 ### Changed
 - Replaced temporary WAV/PCM stub converter with production path via [`WavPcmConverter`](src/main/java/me/tamkungz/codecmedia/internal/convert/WavPcmConverter.java), including real `wav -> pcm` data-chunk extraction and `pcm -> wav` container wrapping.
 - Updated conversion hub wiring in [`DefaultConversionHub`](src/main/java/me/tamkungz/codecmedia/internal/convert/DefaultConversionHub.java) to route WAV/PCM through the renamed real converter.
 - Added preset-driven PCM->WAV parameter parsing in [`WavPcmConverter.parsePcmWavParams()`](src/main/java/me/tamkungz/codecmedia/internal/convert/WavPcmConverter.java) supporting `sr=`, `ch=`, and `bits=`.
 - Updated facade regression behavior in [`CodecMediaFacadeTest`](src/test/java/me/tamkungz/codecmedia/CodecMediaFacadeTest.java) to assert real re-encode behavior and preset-based output stream properties for WAV/PCM route.
+- Updated metadata behavior to use embedded WAV `LIST/INFO` read/write for WAV inputs while keeping sidecar (`.codecmedia.properties`) persistence for non-WAV formats in [`StubCodecMediaEngine`](src/main/java/me/tamkungz/codecmedia/internal/StubCodecMediaEngine.java).
+- Updated playback behavior in [`CodecMediaEngine.play()`](src/main/java/me/tamkungz/codecmedia/CodecMediaEngine.java) implementation path to prioritize internal Java sampled playback for WAV/AIFF family before desktop-open fallback.
 
 ### Fixed
 - Added defensive bounds checks for little-endian reads in [`WavPcmConverter.readLeInt()`](src/main/java/me/tamkungz/codecmedia/internal/convert/WavPcmConverter.java) and [`WavPcmConverter.readLeUnsignedShort()`](src/main/java/me/tamkungz/codecmedia/internal/convert/WavPcmConverter.java).
 - Added WAV `fmt ` validation before payload extraction in [`WavPcmConverter.extractWavDataChunk()`](src/main/java/me/tamkungz/codecmedia/internal/convert/WavPcmConverter.java), rejecting non-PCM WAV payload extraction.
 - Hardened chunk traversal and container construction against arithmetic overflow in [`WavPcmConverter.extractWavDataChunk()`](src/main/java/me/tamkungz/codecmedia/internal/convert/WavPcmConverter.java) and [`WavPcmConverter.wrapPcmAsWav()`](src/main/java/me/tamkungz/codecmedia/internal/convert/WavPcmConverter.java).
+- Fixed WAV metadata flow so write/read operations no longer rely on sidecar-only behavior for WAV files, improving in-file metadata persistence consistency.
+- Fixed playback routing so WAV/AIFF-family inputs no longer depend solely on desktop integration when internal sampled playback is available.
 
 ### Verified
 - Confirmed facade regression coverage with `mvn -Dtest=CodecMediaFacadeTest test`.
+- Confirmed WAV metadata parser behavior with `mvn -Dtest=WavParserTest test`.
+- Confirmed engine metadata and playback routing behavior with `mvn -Dtest=CodecMediaFacadeTest,StubCodecMediaEnginePlaybackRoutingTest test`.
 
 ## [1.1.3] - 2026-03-16
 

@@ -14,6 +14,13 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.TreeMap;
 
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.Clip;
+import javax.sound.sampled.LineEvent;
+import javax.sound.sampled.LineUnavailableException;
+import javax.sound.sampled.UnsupportedAudioFileException;
+
 import me.tamkungz.codecmedia.CodecMediaEngine;
 import me.tamkungz.codecmedia.CodecMediaException;
 import me.tamkungz.codecmedia.internal.audio.aiff.AiffCodec;
@@ -76,7 +83,23 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
 
     private static final long STRICT_VALIDATION_MAX_BYTES = 32L * 1024L * 1024L;
     private static final int PROBE_PREFIX_BYTES = 128 * 1024;
-    private final ConversionHub conversionHub = new DefaultConversionHub();
+    private final ConversionHub conversionHub;
+    private final JavaSampledPlaybackBackend javaSampledPlaybackBackend;
+    private final DesktopPlaybackBackend desktopPlaybackBackend;
+
+    public StubCodecMediaEngine() {
+        this(new DefaultConversionHub(), new JdkJavaSampledPlaybackBackend(), new AwtDesktopPlaybackBackend());
+    }
+
+    StubCodecMediaEngine(
+            ConversionHub conversionHub,
+            JavaSampledPlaybackBackend javaSampledPlaybackBackend,
+            DesktopPlaybackBackend desktopPlaybackBackend
+    ) {
+        this.conversionHub = conversionHub;
+        this.javaSampledPlaybackBackend = javaSampledPlaybackBackend;
+        this.desktopPlaybackBackend = desktopPlaybackBackend;
+    }
 
     @Override
     public ProbeResult get(Path input) throws CodecMediaException {
@@ -570,6 +593,17 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
         entries.put("extension", probe.extension());
         entries.put("mediaType", probe.mediaType().name());
 
+        if ("wav".equals(normalizeExtension(probe.extension()))) {
+            try {
+                Map<String, String> wavInfo = WavParser.readInfoMetadata(Files.readAllBytes(input));
+                for (Map.Entry<String, String> infoEntry : wavInfo.entrySet()) {
+                    entries.putIfAbsent(infoEntry.getKey(), infoEntry.getValue());
+                }
+            } catch (IOException e) {
+                throw new CodecMediaException("Failed to read WAV metadata: " + input, e);
+            }
+        }
+
         Path sidecar = metadataSidecarPath(input);
         if (Files.exists(sidecar)) {
             Properties properties = new Properties();
@@ -599,6 +633,18 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
             }
             if (entry.getValue() == null) {
                 throw new CodecMediaException("Metadata value must not be null for key: " + entry.getKey());
+            }
+        }
+
+        String extension = normalizeExtension(extractExtension(input));
+        if ("wav".equals(extension)) {
+            try {
+                byte[] wavBytes = Files.readAllBytes(input);
+                byte[] withMetadata = WavParser.writeInfoMetadata(wavBytes, metadata.entries());
+                Files.write(input, withMetadata);
+                return;
+            } catch (IOException e) {
+                throw new CodecMediaException("Failed to write WAV metadata: " + input, e);
             }
         }
 
@@ -699,13 +745,36 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
             return new PlaybackResult(true, "dry-run", probe.mediaType(), "Playback simulation successful");
         }
 
-        if (effective.allowExternalApp() && Desktop.isDesktopSupported()) {
+        CodecMediaException javaSampledFailure = null;
+        if (probe.mediaType() == MediaType.AUDIO && supportsJavaSampledExtension(probe.extension())) {
             try {
-                Desktop.getDesktop().open(input.toFile());
+                javaSampledPlaybackBackend.play(input);
+                return new PlaybackResult(true, "java-sampled", probe.mediaType(), "Started playback using javax.sound.sampled");
+            } catch (CodecMediaException e) {
+                javaSampledFailure = e;
+            }
+        }
+
+        if (effective.allowExternalApp() && desktopPlaybackBackend.isSupported()) {
+            try {
+                desktopPlaybackBackend.open(input);
                 return new PlaybackResult(true, "desktop-open", probe.mediaType(), "Opened with system default application");
             } catch (IOException | RuntimeException e) {
+                if (javaSampledFailure != null) {
+                    throw new CodecMediaException(
+                            "Failed to start internal Java sampled playback and external application fallback: " + input,
+                            e
+                    );
+                }
                 throw new CodecMediaException("Failed to open media with system player/viewer: " + input, e);
             }
+        }
+
+        if (javaSampledFailure != null) {
+            throw new CodecMediaException(
+                    "No playback backend available after Java sampled attempt: " + javaSampledFailure.getMessage(),
+                    javaSampledFailure
+            );
         }
 
         throw new CodecMediaException("No playback backend available. Try dryRun=true or allowExternalApp=true");
@@ -916,6 +985,14 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
         return dot > 0 ? fileName.substring(0, dot) : fileName;
     }
 
+    private static boolean supportsJavaSampledExtension(String extension) {
+        String normalized = normalizeExtension(extension);
+        return "wav".equals(normalized)
+                || "aif".equals(normalized)
+                || "aiff".equals(normalized)
+                || "aifc".equals(normalized);
+    }
+
     private static MediaType mediaTypeByExtension(String extension) {
         return switch (normalizeExtension(extension)) {
             case "mp3", "ogg", "wav", "aif", "aiff", "aifc", "pcm", "m4a", "aac", "flac" -> MediaType.AUDIO;
@@ -923,5 +1000,45 @@ public final class StubCodecMediaEngine implements CodecMediaEngine {
             case "png", "jpg", "jpeg", "gif", "bmp", "webp", "tif", "tiff", "heic", "heif", "avif" -> MediaType.IMAGE;
             default -> MediaType.UNKNOWN;
         };
+    }
+
+    interface JavaSampledPlaybackBackend {
+        void play(Path input) throws CodecMediaException;
+    }
+
+    interface DesktopPlaybackBackend {
+        boolean isSupported();
+
+        void open(Path input) throws IOException;
+    }
+
+    private static final class JdkJavaSampledPlaybackBackend implements JavaSampledPlaybackBackend {
+        @Override
+        public void play(Path input) throws CodecMediaException {
+            try (AudioInputStream audioInputStream = AudioSystem.getAudioInputStream(input.toFile())) {
+                Clip clip = AudioSystem.getClip();
+                clip.open(audioInputStream);
+                clip.addLineListener(event -> {
+                    if (event.getType() == LineEvent.Type.STOP || event.getType() == LineEvent.Type.CLOSE) {
+                        clip.close();
+                    }
+                });
+                clip.start();
+            } catch (UnsupportedAudioFileException | LineUnavailableException | IOException | RuntimeException e) {
+                throw new CodecMediaException("Java sampled playback failed for " + input + ": " + e.getMessage(), e);
+            }
+        }
+    }
+
+    private static final class AwtDesktopPlaybackBackend implements DesktopPlaybackBackend {
+        @Override
+        public boolean isSupported() {
+            return Desktop.isDesktopSupported();
+        }
+
+        @Override
+        public void open(Path input) throws IOException {
+            Desktop.getDesktop().open(input.toFile());
+        }
     }
 }

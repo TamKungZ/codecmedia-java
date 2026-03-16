@@ -1,6 +1,11 @@
 package me.tamkungz.codecmedia.internal.audio.wav;
 
+import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 import me.tamkungz.codecmedia.CodecMediaException;
 import me.tamkungz.codecmedia.internal.audio.BitrateMode;
@@ -10,6 +15,15 @@ public final class WavParser {
     private static final int WAVE_FORMAT_PCM = 0x0001;
     private static final int WAVE_FORMAT_IEEE_FLOAT = 0x0003;
     private static final int WAVE_FORMAT_EXTENSIBLE = 0xFFFE;
+    private static final Map<String, String> INFO_TO_METADATA = Map.of(
+            "INAM", "title",
+            "IART", "artist",
+            "IPRD", "album",
+            "ICMT", "comment",
+            "ICRD", "date",
+            "IGNR", "genre"
+    );
+    private static final String[] METADATA_WRITE_ORDER = {"title", "artist", "album", "comment", "date", "genre"};
 
     private WavParser() {
     }
@@ -118,6 +132,114 @@ public final class WavParser {
                 && bytes[11] == 'E';
     }
 
+    public static Map<String, String> readInfoMetadata(byte[] bytes) throws CodecMediaException {
+        if (!isLikelyWav(bytes)) {
+            throw new CodecMediaException("Not a WAV/RIFF file");
+        }
+
+        Map<String, String> out = new LinkedHashMap<>();
+        int offset = 12;
+        while (offset + 8 <= bytes.length) {
+            String chunkId = readAscii(bytes, offset, 4);
+            long chunkSize = readLeUInt32(bytes, offset + 4);
+            int chunkDataStart = offset + 8;
+            long chunkDataEnd = chunkDataStart + chunkSize;
+            if (chunkDataEnd < chunkDataStart || chunkDataEnd > bytes.length) {
+                throw new CodecMediaException("WAV chunk exceeds file bounds: " + chunkId);
+            }
+
+            if ("LIST".equals(chunkId) && chunkSize >= 4) {
+                String listType = readAscii(bytes, chunkDataStart, 4);
+                if ("INFO".equals(listType)) {
+                    readInfoListEntries(bytes, chunkDataStart + 4, (int) chunkDataEnd, out);
+                }
+            }
+
+            long padded = (chunkSize % 2 == 0) ? chunkSize : chunkSize + 1;
+            long nextOffset = chunkDataStart + padded;
+            if (nextOffset < chunkDataStart || nextOffset > bytes.length || nextOffset > Integer.MAX_VALUE) {
+                throw new CodecMediaException("WAV chunk exceeds file bounds: " + chunkId);
+            }
+            offset = (int) nextOffset;
+        }
+
+        return out;
+    }
+
+    public static byte[] writeInfoMetadata(byte[] bytes, Map<String, String> metadataEntries) throws CodecMediaException {
+        if (!isLikelyWav(bytes)) {
+            throw new CodecMediaException("Not a WAV/RIFF file");
+        }
+        if (bytes[0] == 'R' && bytes[1] == 'F' && bytes[2] == '6' && bytes[3] == '4') {
+            throw new CodecMediaException("RF64 metadata writing is not supported");
+        }
+
+        List<byte[]> keptChunks = new ArrayList<>();
+        int offset = 12;
+        while (offset + 8 <= bytes.length) {
+            String chunkId = readAscii(bytes, offset, 4);
+            long chunkSize = readLeUInt32(bytes, offset + 4);
+            int chunkDataStart = offset + 8;
+            long chunkDataEnd = chunkDataStart + chunkSize;
+            if (chunkDataEnd < chunkDataStart || chunkDataEnd > bytes.length) {
+                throw new CodecMediaException("WAV chunk exceeds file bounds: " + chunkId);
+            }
+
+            boolean isInfoList = false;
+            if ("LIST".equals(chunkId) && chunkSize >= 4) {
+                String listType = readAscii(bytes, chunkDataStart, 4);
+                isInfoList = "INFO".equals(listType);
+            }
+
+            long padded = (chunkSize % 2 == 0) ? chunkSize : chunkSize + 1;
+            long nextOffset = chunkDataStart + padded;
+            if (nextOffset < chunkDataStart || nextOffset > bytes.length || nextOffset > Integer.MAX_VALUE) {
+                throw new CodecMediaException("WAV chunk exceeds file bounds: " + chunkId);
+            }
+
+            if (!isInfoList) {
+                int length = (int) (nextOffset - offset);
+                byte[] rawChunk = new byte[length];
+                System.arraycopy(bytes, offset, rawChunk, 0, length);
+                keptChunks.add(rawChunk);
+            }
+            offset = (int) nextOffset;
+        }
+
+        byte[] infoChunk = buildInfoListChunk(metadataEntries);
+        long total = 12L;
+        for (byte[] chunk : keptChunks) {
+            total += chunk.length;
+        }
+        if (infoChunk != null) {
+            total += infoChunk.length;
+        }
+        if (total > Integer.MAX_VALUE) {
+            throw new CodecMediaException("WAV file is too large after metadata write");
+        }
+
+        byte[] out = new byte[(int) total];
+        out[0] = 'R';
+        out[1] = 'I';
+        out[2] = 'F';
+        out[3] = 'F';
+        writeLeInt(out, 4, (int) (total - 8));
+        out[8] = 'W';
+        out[9] = 'A';
+        out[10] = 'V';
+        out[11] = 'E';
+
+        int outOffset = 12;
+        for (byte[] chunk : keptChunks) {
+            System.arraycopy(chunk, 0, out, outOffset, chunk.length);
+            outOffset += chunk.length;
+        }
+        if (infoChunk != null) {
+            System.arraycopy(infoChunk, 0, out, outOffset, infoChunk.length);
+        }
+        return out;
+    }
+
     private static void validateSupportedAudioFormat(int audioFormat, byte[] bytes, int fmtOffset, long fmtChunkSize)
             throws CodecMediaException {
         if (audioFormat == WAVE_FORMAT_PCM || audioFormat == WAVE_FORMAT_IEEE_FLOAT) {
@@ -173,6 +295,117 @@ public final class WavParser {
 
     private static long readLeUInt32(byte[] bytes, int offset) throws CodecMediaException {
         return readLeInt(bytes, offset) & 0xFFFFFFFFL;
+    }
+
+    private static void readInfoListEntries(byte[] bytes, int offset, int limit, Map<String, String> out)
+            throws CodecMediaException {
+        int pos = offset;
+        while (pos + 8 <= limit) {
+            String id = readAscii(bytes, pos, 4);
+            long size = readLeUInt32(bytes, pos + 4);
+            int dataStart = pos + 8;
+            long dataEndLong = dataStart + size;
+            if (dataEndLong < dataStart || dataEndLong > limit) {
+                throw new CodecMediaException("WAV INFO chunk exceeds LIST bounds: " + id);
+            }
+
+            String key = INFO_TO_METADATA.get(id);
+            if (key != null) {
+                int dataEnd = (int) dataEndLong;
+                int effectiveEnd = dataEnd;
+                while (effectiveEnd > dataStart && bytes[effectiveEnd - 1] == 0) {
+                    effectiveEnd--;
+                }
+                String value = new String(bytes, dataStart, effectiveEnd - dataStart, StandardCharsets.UTF_8).trim();
+                if (!value.isEmpty()) {
+                    out.put(key, value);
+                }
+            }
+
+            long padded = (size % 2 == 0) ? size : size + 1;
+            long next = dataStart + padded;
+            if (next < dataStart || next > limit || next > Integer.MAX_VALUE) {
+                throw new CodecMediaException("WAV INFO chunk exceeds LIST bounds: " + id);
+            }
+            pos = (int) next;
+        }
+    }
+
+    private static byte[] buildInfoListChunk(Map<String, String> metadataEntries) throws CodecMediaException {
+        if (metadataEntries == null || metadataEntries.isEmpty()) {
+            return null;
+        }
+
+        ByteArrayOutputStream listPayload = new ByteArrayOutputStream();
+        writeAscii(listPayload, "INFO");
+        for (String metadataKey : METADATA_WRITE_ORDER) {
+            String value = metadataEntries.get(metadataKey);
+            if (value == null) {
+                continue;
+            }
+            String infoId = metadataToInfoId(metadataKey);
+            if (infoId == null) {
+                continue;
+            }
+
+            byte[] valueBytes = value.getBytes(StandardCharsets.UTF_8);
+            int dataSize = valueBytes.length + 1;
+            writeAscii(listPayload, infoId);
+            writeLeInt(listPayload, dataSize);
+            listPayload.writeBytes(valueBytes);
+            listPayload.write(0);
+            if ((dataSize & 1) != 0) {
+                listPayload.write(0);
+            }
+        }
+
+        byte[] payload = listPayload.toByteArray();
+        if (payload.length <= 4) {
+            return null;
+        }
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        writeAscii(out, "LIST");
+        writeLeInt(out, payload.length);
+        out.writeBytes(payload);
+        if ((payload.length & 1) != 0) {
+            out.write(0);
+        }
+        return out.toByteArray();
+    }
+
+    private static String metadataToInfoId(String metadataKey) {
+        for (Map.Entry<String, String> entry : INFO_TO_METADATA.entrySet()) {
+            if (entry.getValue().equals(metadataKey)) {
+                return entry.getKey();
+            }
+        }
+        return null;
+    }
+
+    private static String readAscii(byte[] bytes, int offset, int length) throws CodecMediaException {
+        if (offset < 0 || offset + length > bytes.length) {
+            throw new CodecMediaException("Unexpected end of WAV data");
+        }
+        return new String(bytes, offset, length, StandardCharsets.US_ASCII);
+    }
+
+    private static void writeAscii(ByteArrayOutputStream out, String value) {
+        out.writeBytes(value.getBytes(StandardCharsets.US_ASCII));
+    }
+
+    private static void writeLeInt(byte[] out, int offset, int value) {
+        out[offset] = (byte) (value & 0xFF);
+        out[offset + 1] = (byte) ((value >>> 8) & 0xFF);
+        out[offset + 2] = (byte) ((value >>> 16) & 0xFF);
+        out[offset + 3] = (byte) ((value >>> 24) & 0xFF);
+    }
+
+    private static void writeLeInt(ByteArrayOutputStream out, int value) {
+        out.write(value & 0xFF);
+        out.write((value >>> 8) & 0xFF);
+        out.write((value >>> 16) & 0xFF);
+        out.write((value >>> 24) & 0xFF);
     }
 
     private static long readLeLong(byte[] bytes, int offset) throws CodecMediaException {

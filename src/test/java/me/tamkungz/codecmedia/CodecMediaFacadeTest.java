@@ -99,9 +99,46 @@ class CodecMediaFacadeTest {
             assertEquals("C Major Scale", metadata.entries().get("title"));
             assertEquals("CodecMedia Test", metadata.entries().get("artist"));
             assertEquals("audio/mpeg", metadata.entries().get("mimeType"));
+            assertTrue(Files.exists(tempMp3.resolveSibling(tempMp3.getFileName() + ".codecmedia.properties")));
         } finally {
             Files.deleteIfExists(tempMp3.resolveSibling(tempMp3.getFileName() + ".codecmedia.properties"));
             Files.deleteIfExists(tempMp3);
+        }
+    }
+
+    @Test
+    void writeAndReadMetadata_shouldRoundTripViaEmbeddedWavInfo() throws Exception {
+        CodecMediaEngine engine = CodecMedia.createDefault();
+        Path tempWav = createTempFileWithResource("c-major-scale_test_ableton-live.wav", ".wav");
+        Path wavSidecar = tempWav.resolveSibling(tempWav.getFileName() + ".codecmedia.properties");
+
+        try {
+            engine.writeMetadata(tempWav, new me.tamkungz.codecmedia.model.Metadata(Map.of(
+                    "title", "Embedded WAV Title",
+                    "artist", "Embedded WAV Artist",
+                    "album", "Embedded WAV Album",
+                    "comment", "Embedded WAV Comment",
+                    "date", "2026-03-16",
+                    "genre", "Test Genre"
+            )));
+
+            var metadata = engine.readMetadata(tempWav);
+            assertEquals("Embedded WAV Title", metadata.entries().get("title"));
+            assertEquals("Embedded WAV Artist", metadata.entries().get("artist"));
+            assertEquals("Embedded WAV Album", metadata.entries().get("album"));
+            assertEquals("Embedded WAV Comment", metadata.entries().get("comment"));
+            assertEquals("2026-03-16", metadata.entries().get("date"));
+            assertEquals("Test Genre", metadata.entries().get("genre"));
+            assertEquals("audio/wav", metadata.entries().get("mimeType"));
+            assertFalse(Files.exists(wavSidecar));
+
+            var probe = engine.probe(tempWav);
+            assertEquals("audio/wav", probe.mimeType());
+            assertEquals("wav", probe.extension());
+            assertEquals(me.tamkungz.codecmedia.model.MediaType.AUDIO, probe.mediaType());
+        } finally {
+            Files.deleteIfExists(wavSidecar);
+            Files.deleteIfExists(tempWav);
         }
     }
 

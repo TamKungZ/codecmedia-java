@@ -1,6 +1,10 @@
 package me.tamkungz.codecmedia.internal.audio.wav;
 
+import java.util.Map;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
@@ -56,6 +60,49 @@ class WavParserTest {
         assertEquals(1536, info.bitrateKbps());
         assertEquals(1000, info.durationMillis());
         assertEquals(BitrateMode.CBR, info.bitrateMode());
+    }
+
+    @Test
+    void shouldWriteAndReadListInfoMetadata() throws Exception {
+        byte[] wav = createPcmWav(2, 44100, 16, 44100 * 2 * 2);
+
+        byte[] withMetadata = WavParser.writeInfoMetadata(wav, Map.of(
+                "title", "CodecMedia Song",
+                "artist", "CodecMedia Artist",
+                "album", "CodecMedia Album",
+                "comment", "Embedded RIFF INFO",
+                "date", "2026-03-16",
+                "genre", "Test"
+        ));
+
+        assertNotNull(withMetadata);
+        assertTrue(withMetadata.length > wav.length);
+
+        Map<String, String> extracted = WavParser.readInfoMetadata(withMetadata);
+        assertEquals("CodecMedia Song", extracted.get("title"));
+        assertEquals("CodecMedia Artist", extracted.get("artist"));
+        assertEquals("CodecMedia Album", extracted.get("album"));
+        assertEquals("Embedded RIFF INFO", extracted.get("comment"));
+        assertEquals("2026-03-16", extracted.get("date"));
+        assertEquals("Test", extracted.get("genre"));
+
+        WavProbeInfo info = WavParser.parse(withMetadata);
+        assertEquals(2, info.channels());
+        assertEquals(44100, info.sampleRate());
+    }
+
+    @Test
+    void shouldRemoveExistingInfoListWhenWritingEmptyMetadata() throws Exception {
+        byte[] wav = createPcmWav(2, 44100, 16, 44100 * 2 * 2);
+        byte[] withMetadata = WavParser.writeInfoMetadata(wav, Map.of("title", "Before"));
+
+        byte[] withoutMetadata = WavParser.writeInfoMetadata(withMetadata, Map.of());
+        Map<String, String> extracted = WavParser.readInfoMetadata(withoutMetadata);
+
+        assertFalse(extracted.containsKey("title"));
+        WavProbeInfo info = WavParser.parse(withoutMetadata);
+        assertEquals(2, info.channels());
+        assertEquals(44100, info.sampleRate());
     }
 
     private static byte[] createPcmWav(int channels, int sampleRate, int bitsPerSample, int dataSize) {

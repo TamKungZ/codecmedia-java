@@ -6,7 +6,7 @@
 [![Java](https://img.shields.io/badge/Java-17%2B-ED8B00?logo=openjdk&logoColor=white)](https://openjdk.org/)
 [![Maven](https://img.shields.io/badge/Maven-3.9%2B-C71A36?logo=apachemaven&logoColor=white)](https://maven.apache.org/)
 
-CodecMedia is a Java library for media probing, validation, metadata sidecar persistence, audio extraction, playback workflow simulation, and conversion routing.
+CodecMedia is a Java library for media probing, validation, metadata persistence (embedded LIST/INFO for WAV and sidecar for non-WAV), audio extraction, playback workflow handling, and conversion routing.
 
 
 <p align="center">
@@ -39,28 +39,28 @@ CodecMedia is a Java library for media probing, validation, metadata sidecar per
   - WebM (EBML container parsing)
 - Validation with size limits and strict parser checks for MP3/OGG/WAV/AIFF/FLAC/PNG/JPEG/WebP/BMP/TIFF/HEIC/HEIF/AVIF/MOV/MP4/WebM
 - MOV/MP4/WebM probe tags now include richer video metadata when present (for example `displayAspectRatio`, `bitDepth`, `videoBitrateKbps`, `audioBitrateKbps`)
-- Metadata read/write with sidecar persistence (`.codecmedia.properties`)
+- Metadata read/write with embedded WAV LIST/INFO support and sidecar persistence (`.codecmedia.properties`) for non-WAV inputs
 - In-Java extraction and conversion file operations
 - Image-to-image conversion in Java for: `png`, `jpg`/`jpeg`, `webp`, `bmp`, `tif`/`tiff`, `heic`/`heif`/`avif`
-- Playback API with dry-run support and optional desktop-open backend
+- Playback API with dry-run support, internal Java sampled backend for WAV/AIFF family, and optional desktop-open fallback
 - Conversion hub routing with explicit unsupported routes and a real `wav <-> pcm` path (`WAV -> PCM` data-chunk extraction, `PCM -> WAV` wrapping)
 
 ## API Behavior Summary
 
 - `get(input)`: alias of `probe(input)` for convenience.
 - `probe(input)`: detects media/container characteristics and returns technical stream info for supported formats.
-- `readMetadata(input)`: returns derived probe metadata plus sidecar entries when present.
-- `writeMetadata(input, metadata)`: validates and writes metadata to a sidecar properties file next to the input.
+- `readMetadata(input)`: returns derived probe metadata plus embedded LIST/INFO tags for WAV, and sidecar entries for non-WAV when present.
+- `writeMetadata(input, metadata)`: validates and writes embedded LIST/INFO tags for WAV, and writes a sidecar properties file next to non-WAV inputs.
 - `extractAudio(input, outputDir, options)`: validates audio input and writes extracted output into `outputDir`.
 - `convert(input, output, options)`: performs routed conversion behavior and enforces `overwrite` handling.
-- `play(input, options)`: supports dry-run playback and optional system default app launch.
+- `play(input, options)`: supports dry-run playback, routes WAV/AIFF-family playback through an internal Java sampled backend, and falls back to optional system default app launch.
 - `validate(input, options)`: validates existence, max size, and optional strict parser-level checks.
 
 ## Notes and Limitations
 
 - Current probing focuses on **technical media info** (mime/type/streams/basic tags).
 - Probe routing now performs a lightweight header-prefix sniff before full decode to reduce unnecessary full-file reads for clearly unsupported/unknown inputs.
-- `readMetadata` currently uses sidecar metadata persistence; it is **not** a full embedded tag extractor (for example ID3 album art/APIC).
+- `readMetadata` supports embedded LIST/INFO for WAV plus sidecar metadata persistence for non-WAV inputs; it is **not** a full embedded tag extractor for other formats (for example ID3 album art/APIC).
 - Audio-to-audio conversion is not implemented yet for general real transcode cases (for example `mp3 -> ogg`).
 - The currently implemented audio route is `wav <-> pcm`:
   - `wav -> pcm`: extracts raw PCM payload from WAV `data` chunk
