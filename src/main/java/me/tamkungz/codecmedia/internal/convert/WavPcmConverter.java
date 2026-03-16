@@ -96,7 +96,7 @@ public final class WavPcmConverter implements MediaConverter {
                 if (chunkSize < 16) {
                     throw new CodecMediaException("Invalid WAV fmt chunk");
                 }
-                int audioFormat = readLeShort(wavBytes, dataStart);
+                int audioFormat = readLeUnsignedShort(wavBytes, dataStart);
                 if (audioFormat != 1) {
                     throw new CodecMediaException("Unsupported WAV format for PCM extraction: " + audioFormat);
                 }
@@ -113,8 +113,12 @@ public final class WavPcmConverter implements MediaConverter {
                 return out;
             }
 
-            int paddedSize = (chunkSize % 2 == 0) ? chunkSize : chunkSize + 1;
-            offset = dataStart + paddedSize;
+            long paddedSize = (chunkSize % 2 == 0) ? chunkSize : (long) chunkSize + 1L;
+            long nextOffset = (long) dataStart + paddedSize;
+            if (nextOffset > Integer.MAX_VALUE || nextOffset > wavBytes.length) {
+                throw new CodecMediaException("WAV chunk offset overflow");
+            }
+            offset = (int) nextOffset;
         }
 
         throw new CodecMediaException("WAV data chunk not found");
@@ -135,7 +139,7 @@ public final class WavPcmConverter implements MediaConverter {
         int byteRate = sampleRate * channels * bytesPerSample;
         short blockAlign = (short) (channels * bytesPerSample);
 
-        int riffChunkSize = 36 + dataSize;
+        int riffChunkSize = (int) (totalBytes - 8L);
         ByteBuffer b = ByteBuffer.allocate((int) totalBytes).order(ByteOrder.LITTLE_ENDIAN);
         b.put((byte) 'R').put((byte) 'I').put((byte) 'F').put((byte) 'F');
         b.putInt(riffChunkSize);
@@ -166,7 +170,7 @@ public final class WavPcmConverter implements MediaConverter {
                 | ((bytes[offset + 3] & 0xFF) << 24);
     }
 
-    private static int readLeShort(byte[] bytes, int offset) throws CodecMediaException {
+    private static int readLeUnsignedShort(byte[] bytes, int offset) throws CodecMediaException {
         if (offset < 0 || offset + 2 > bytes.length) {
             throw new CodecMediaException("Unexpected end of WAV data");
         }
@@ -198,10 +202,7 @@ public final class WavPcmConverter implements MediaConverter {
                 continue;
             }
             if (token.startsWith(PRESET_PREFIX_BITS)) {
-                int parsed = parseIntParam(token.substring(PRESET_PREFIX_BITS.length()), "bits", 8, 32);
-                if (parsed != 8 && parsed != 16 && parsed != 24 && parsed != 32) {
-                    throw new CodecMediaException("Unsupported bits value in preset (allowed: 8,16,24,32)");
-                }
+                int parsed = parseBitsPerSample(token.substring(PRESET_PREFIX_BITS.length()));
                 bitsPerSample = (short) parsed;
                 continue;
             }
@@ -221,6 +222,14 @@ public final class WavPcmConverter implements MediaConverter {
         } catch (NumberFormatException e) {
             throw new CodecMediaException("Invalid integer for " + name + ": " + value, e);
         }
+    }
+
+    private static int parseBitsPerSample(String value) throws CodecMediaException {
+        int parsed = parseIntParam(value, "bits", 8, 32);
+        return switch (parsed) {
+            case 8, 16, 24, 32 -> parsed;
+            default -> throw new CodecMediaException("Unsupported bits value in preset (allowed: 8,16,24,32)");
+        };
     }
 
     private record PcmWavParams(int sampleRate, short channels, short bitsPerSample) {

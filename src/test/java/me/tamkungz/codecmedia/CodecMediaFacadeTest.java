@@ -329,7 +329,7 @@ class CodecMediaFacadeTest {
     }
 
     @Test
-    void convert_shouldAllowWavToPcmStubRoute() throws Exception {
+    void convert_shouldExtractRawPcmFromWav() throws Exception {
         CodecMediaEngine engine = CodecMedia.createDefault();
         Path tempWav = createTempFileWithResource("c-major-scale_test_ableton-live.wav", ".wav");
         Path outputPcm = Files.createTempFile("codecmedia-wav-to-pcm-", ".pcm");
@@ -337,10 +337,60 @@ class CodecMediaFacadeTest {
         try {
             var converted = engine.convert(tempWav, outputPcm, new me.tamkungz.codecmedia.options.ConversionOptions("pcm", "balanced", true));
             assertEquals("pcm", converted.format());
-            assertFalse(converted.reencoded());
+            assertTrue(converted.reencoded());
             assertTrue(Files.exists(outputPcm));
             assertTrue(Files.size(outputPcm) > 0);
+
+            byte[] pcm = Files.readAllBytes(outputPcm);
+            assertFalse(
+                    pcm.length >= 4 && pcm[0] == 'R' && pcm[1] == 'I' && pcm[2] == 'F' && pcm[3] == 'F',
+                    "WAV->PCM output should be raw payload, not a RIFF/WAV container"
+            );
         } finally {
+            Files.deleteIfExists(outputPcm);
+            Files.deleteIfExists(tempWav);
+        }
+    }
+
+    @Test
+    void convert_shouldWrapRawPcmAsWav() throws Exception {
+        CodecMediaEngine engine = CodecMedia.createDefault();
+        Path tempWav = createTempFileWithResource("c-major-scale_test_ableton-live.wav", ".wav");
+        Path outputPcm = Files.createTempFile("codecmedia-wav-to-pcm-for-wrap-", ".pcm");
+        Path outputWav = Files.createTempFile("codecmedia-pcm-to-wav-", ".wav");
+
+        try {
+            var pcm = engine.convert(tempWav, outputPcm, new me.tamkungz.codecmedia.options.ConversionOptions("pcm", "balanced", true));
+            assertEquals("pcm", pcm.format());
+            assertTrue(Files.exists(outputPcm));
+            assertTrue(Files.size(outputPcm) > 0);
+
+            var wav = engine.convert(
+                    outputPcm,
+                    outputWav,
+                    new me.tamkungz.codecmedia.options.ConversionOptions("wav", "sr=22050,ch=1,bits=16", true)
+            );
+            assertEquals("wav", wav.format());
+            assertTrue(wav.reencoded());
+            assertTrue(Files.exists(outputWav));
+            assertTrue(Files.size(outputWav) > 44);
+
+            byte[] wrapped = Files.readAllBytes(outputWav);
+            assertTrue(wrapped.length >= 12);
+            assertTrue(wrapped[0] == 'R' && wrapped[1] == 'I' && wrapped[2] == 'F' && wrapped[3] == 'F');
+            assertTrue(wrapped[8] == 'W' && wrapped[9] == 'A' && wrapped[10] == 'V' && wrapped[11] == 'E');
+
+            var probed = engine.probe(outputWav);
+            assertEquals("audio/wav", probed.mimeType());
+            assertEquals("wav", probed.extension());
+            assertEquals(me.tamkungz.codecmedia.model.MediaType.AUDIO, probed.mediaType());
+            assertFalse(probed.streams().isEmpty());
+            assertNotNull(probed.streams().get(0).sampleRate());
+            assertNotNull(probed.streams().get(0).channels());
+            assertEquals(22_050, probed.streams().get(0).sampleRate());
+            assertEquals(1, probed.streams().get(0).channels());
+        } finally {
+            Files.deleteIfExists(outputWav);
             Files.deleteIfExists(outputPcm);
             Files.deleteIfExists(tempWav);
         }

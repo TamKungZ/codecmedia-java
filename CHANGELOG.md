@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.4] - 2026-03-16
+
+### Changed
+- Replaced temporary WAV/PCM stub converter with production path via [`WavPcmConverter`](src/main/java/me/tamkungz/codecmedia/internal/convert/WavPcmConverter.java), including real `wav -> pcm` data-chunk extraction and `pcm -> wav` container wrapping.
+- Updated conversion hub wiring in [`DefaultConversionHub`](src/main/java/me/tamkungz/codecmedia/internal/convert/DefaultConversionHub.java) to route WAV/PCM through the renamed real converter.
+- Added preset-driven PCM->WAV parameter parsing in [`WavPcmConverter.parsePcmWavParams()`](src/main/java/me/tamkungz/codecmedia/internal/convert/WavPcmConverter.java) supporting `sr=`, `ch=`, and `bits=`.
+- Updated facade regression behavior in [`CodecMediaFacadeTest`](src/test/java/me/tamkungz/codecmedia/CodecMediaFacadeTest.java) to assert real re-encode behavior and preset-based output stream properties for WAV/PCM route.
+
+### Fixed
+- Added defensive bounds checks for little-endian reads in [`WavPcmConverter.readLeInt()`](src/main/java/me/tamkungz/codecmedia/internal/convert/WavPcmConverter.java) and [`WavPcmConverter.readLeUnsignedShort()`](src/main/java/me/tamkungz/codecmedia/internal/convert/WavPcmConverter.java).
+- Added WAV `fmt ` validation before payload extraction in [`WavPcmConverter.extractWavDataChunk()`](src/main/java/me/tamkungz/codecmedia/internal/convert/WavPcmConverter.java), rejecting non-PCM WAV payload extraction.
+- Hardened chunk traversal and container construction against arithmetic overflow in [`WavPcmConverter.extractWavDataChunk()`](src/main/java/me/tamkungz/codecmedia/internal/convert/WavPcmConverter.java) and [`WavPcmConverter.wrapPcmAsWav()`](src/main/java/me/tamkungz/codecmedia/internal/convert/WavPcmConverter.java).
+
+### Verified
+- Confirmed facade regression coverage with `mvn -Dtest=CodecMediaFacadeTest test`.
+
 ## [1.1.3] - 2026-03-16
 
 ### Fixed

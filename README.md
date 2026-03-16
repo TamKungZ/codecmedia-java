@@ -43,7 +43,7 @@ CodecMedia is a Java library for media probing, validation, metadata sidecar per
 - In-Java extraction and conversion file operations
 - Image-to-image conversion in Java for: `png`, `jpg`/`jpeg`, `webp`, `bmp`, `tif`/`tiff`, `heic`/`heif`/`avif`
 - Playback API with dry-run support and optional desktop-open backend
-- Conversion hub routing with explicit unsupported routes and a stub `wav <-> pcm` path
+- Conversion hub routing with explicit unsupported routes and a real `wav <-> pcm` path (`WAV -> PCM` data-chunk extraction, `PCM -> WAV` wrapping)
 
 ## API Behavior Summary
 
@@ -61,8 +61,11 @@ CodecMedia is a Java library for media probing, validation, metadata sidecar per
 - Current probing focuses on **technical media info** (mime/type/streams/basic tags).
 - Probe routing now performs a lightweight header-prefix sniff before full decode to reduce unnecessary full-file reads for clearly unsupported/unknown inputs.
 - `readMetadata` currently uses sidecar metadata persistence; it is **not** a full embedded tag extractor (for example ID3 album art/APIC).
-- Audio-to-audio conversion is not implemented yet for real transcode cases (for example `mp3 -> ogg`).
-- The only temporary audio conversion path is a stub `wav <-> pcm` route.
+- Audio-to-audio conversion is not implemented yet for general real transcode cases (for example `mp3 -> ogg`).
+- The currently implemented audio route is `wav <-> pcm`:
+  - `wav -> pcm`: extracts raw PCM payload from WAV `data` chunk
+  - `pcm -> wav`: wraps PCM into PCM WAV container
+  - Optional PCM->WAV preset tuning via `ConversionOptions.preset`, for example: `sr=22050,ch=1,bits=16`
 - Container/unknown conversion routes are intentionally unsupported unless explicitly mapped by the conversion route resolver.
 - TIFF probe currently reads the **first IFD/image** only (multi-page TIFF traversal is not implemented in probe mode).
 - WebP probe currently reports `bitDepth` as an assumed default (`8`) for `VP8`/`VP8L`/`VP8X` unless deeper profile metadata parsing is added.

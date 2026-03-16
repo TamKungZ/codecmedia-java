@@ -6,7 +6,7 @@ import me.tamkungz.codecmedia.model.ConversionResult;
 public final class DefaultConversionHub implements ConversionHub {
 
     private final MediaConverter passthroughConverter = new SameFormatCopyConverter();
-    private final MediaConverter wavPcmStubConverter = new WavPcmStubConverter();
+    private final MediaConverter wavPcmConverter = new WavPcmConverter();
     private final MediaConverter videoToAudioConverter = new UnsupportedRouteConverter(
             "video->audio conversion is not implemented yet (planned conversion hub path)"
     );
@@ -36,7 +36,7 @@ public final class DefaultConversionHub implements ConversionHub {
                 boolean wavPcmPair = ("wav".equals(request.sourceExtension()) && "pcm".equals(request.targetExtension()))
                         || ("pcm".equals(request.sourceExtension()) && "wav".equals(request.targetExtension()));
                 if (wavPcmPair) {
-                    yield wavPcmStubConverter.convert(request);
+                    yield wavPcmConverter.convert(request);
                 }
                 yield audioToAudioTranscodeConverter.convert(request);
             }
