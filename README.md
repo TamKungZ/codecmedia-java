@@ -8,10 +8,16 @@
 
 CodecMedia is a Java library for media probing, validation, metadata persistence (embedded WAV/AIFF/MP3 where supported with sidecar fallback for other formats), audio extraction, playback workflow handling, and conversion routing.
 
-
 <p align="center">
   <img src="https://codecmedia.tamkungz.me/CodecMedia_Full_Logo.png" width="70%" alt="CodecMedia Logo">
 </p>
+
+## What can you do with CodecMedia?
+
+- Extract audio from video in 3 lines
+- Validate media files before upload
+- Read metadata (duration, bitrate, format)
+- Build media pipelines in pure Java
 
 ## Approaches
 - Zero-Dependency
