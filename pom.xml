@@ -12,9 +12,8 @@
 
   <name>CodecMedia</name>
   <description>
-    Universal media processing library for Java.
-    CodecMedia is a Java library for media probing, validation, metadata sidecar persistence,
-    audio extraction, playback workflow simulation, and conversion routing. (Image/Video/Audio)
+    A lightweight Java library for inspecting, validating, and processing media files.  
+    Supports metadata extraction, container parsing, audio/video/image extraction, and format conversion.
   </description>
   <url>https://codecmedia.tamkungz.me/</url>
 
